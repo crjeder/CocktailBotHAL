@@ -1,5 +1,5 @@
 # CocktailBotHAL
-## A Harware Abstraction Layer for cocktail mixing robots
+A Harware Abstraction Layer for cocktail mixing robots
 
 WIP
 
