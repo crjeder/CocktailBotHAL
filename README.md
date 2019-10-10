@@ -3,10 +3,15 @@ A Harware Abstraction Layer for cocktail mixing robots
 
 WIP
 
-API:
+## API
 * Bot 
-  * Initialize
-  * Disable
+  * initialize
+  * disable
+  * clean
+  * calibrate
+  * setup liquids
+  * configure e. g. logging..
+  * mix drink
 * Glass 
   * take
   * offer
