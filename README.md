@@ -12,14 +12,24 @@ WIP
   * setup liquids
   * configure e. g. logging..
   * mix drink
+  * status
 * Glass 
   * take
   * offer
   * test presence
+  * get size / volume of glass
 * Mixer 
   * get number of liquids
   * get liquids names
   * select liquid
 * Dispenser 
   * dispense n units
-  * out of liqid
+  * get liqud level / remaining voulume
+* Error conditions
+ * wrong glass
+ * no glass
+ * contianer empty
+ * leakage
+ * clogging
+ * power lost
+ * cleaning required
