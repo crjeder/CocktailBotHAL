@@ -10,7 +10,7 @@ WIP
   * clean
   * calibrate
   * setup liquids
-  * configure e. g. logging..
+  * read configuration
   * mix drink
   * status
 * Glass 
