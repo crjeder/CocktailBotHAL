@@ -1,7 +1,8 @@
 [package]
-name = "CocktailBotHAL"
+name = "cocktail_bot_hal"
 version = "0.1.0"
 authors = ["crjeder <crjeder@gmail.com>"]
-edition = "2019"
+edition = "2018"
 
 [dependencies]
+#taplo = "0.5.1"
