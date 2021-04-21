@@ -5,4 +5,7 @@ authors = ["crjeder <crjeder@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-#taplo = "0.5.1"
+#taplo = "0.5.1" # for config files
+#zbar-rust = "0.0.16" # QRcode 
+#roy = "0.1.4" # RESTful API client
+
