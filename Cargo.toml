@@ -8,4 +8,4 @@ edition = "2018"
 #taplo = "0.5.1" # for config files
 #zbar-rust = "0.0.16" # QRcode 
 #roy = "0.1.4" # RESTful API client
-
+#embedded-hal-mock = "0.7.2" # fake hal
