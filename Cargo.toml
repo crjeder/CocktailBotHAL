@@ -9,3 +9,4 @@ edition = "2018"
 #zbar-rust = "0.0.16" # QRcode 
 #roy = "0.1.4" # RESTful API client
 #embedded-hal-mock = "0.7.2" # fake hal
+#log = "0.4.14" # for logging
