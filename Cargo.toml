@@ -10,3 +10,4 @@ edition = "2018"
 #roy = "0.1.4" # RESTful API client
 #embedded-hal-mock = "0.7.2" # fake hal
 #log = "0.4.14" # for logging
+#stderrlog = "0.5.1" # to implement logging
