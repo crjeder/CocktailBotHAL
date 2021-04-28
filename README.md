@@ -23,8 +23,8 @@ WIP
   * get liquids names
   * select liquid
 * Dispenser 
-  * dispense n units
-  * get liqud level / remaining voulume (summing up dispensed liquid)
+  * dispense n units -> dispensed volume
+  * ~~get liqud level / remaining voulume (summing up dispensed liquid)~~ -> upstream
 * Error conditions
   * wrong glass (identify eg. by weight)
   * no glass (0 weight)
