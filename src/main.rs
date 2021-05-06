@@ -5,6 +5,18 @@ use serde::{Deserialize, Serialize};
 
 fn main()
 {
+    /* TEST
+    let mut measure: String;
+    measure = String::from("1 1/2 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("1/2 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("10  oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("1 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("10 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("1    oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("90/60 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    measure = String::from("1.5 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
+    */
+
     let imported: Thecocktaildb = serde_json::from_str
     (
         r#"
@@ -53,7 +65,7 @@ fn main()
         println!("{}", imported.drinks[0].strMeasure2.as_ref().unwrap());
       converted.ingredients.push(Ingredient {amount: convert_measure(imported.drinks[0].strMeasure2.as_ref().unwrap()),
           name: imported.drinks[0].strIngredient2.clone().unwrap()});
-    };/*
+    };
     if imported.drinks[0].strIngredient3.is_some() && imported.drinks[0].strMeasure3.is_some()
     {
       converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure3.clone().unwrap()),
@@ -118,9 +130,12 @@ fn main()
     {
       converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure15.clone().unwrap()),
           name: imported.drinks[0].strIngredient15.clone().unwrap()});
-    };*/
+    };
     converted.garnish = String::from("");
     converted.preparation = imported.drinks[0].strInstructions.clone();
+
+    println!("{:?}", converted);
+
     /*
     let converted = Cocktail
     {
@@ -259,12 +274,14 @@ impl Cocktailbot
     // fn display()
 }
 
+#[derive(Debug)]
 pub struct Ingredient
 {
     amount: u8,                 // in ml
     name: String
 }
 
+#[derive(Debug)]
 pub struct Cocktail
 {
     name: String,
@@ -305,6 +322,7 @@ pub struct Glass
     weight: u8                  // in g
 }
 
+#[derive(Debug)]
 pub struct Liquid
 {
     name: String,
@@ -375,8 +393,20 @@ fn convert_measure(measure: &str) -> u8
 
     if captures.name("unit").is_some()          // check if there is a match for unit
     {
-        match captures.name("unit").unwrap().as_str().to_lowercase()
+        conversion = match captures.name("unit").unwrap().as_str().to_lowercase().as_str()
         {
+            "oz" => 30.0,
+            "ml" => 1.0,
+            "cl" => 10.0,
+            "dash" => 1.0,
+            "tl" => 5.0,
+            "bl" => 2.0,
+            "part" => 40.0,
+            "el" => 15.0,
+            "shot" => 45.0,
+            _ => 0.0,
+        };
+
             /*
                 1 oz = 30 ml,
                 1 ml = 1 ml,
@@ -395,21 +425,9 @@ fn convert_measure(measure: &str) -> u8
                 1 Shot = 45 ml
 
             */
-            "oz" => conversion = 30.0,
-            "ml" => conversion = 1.0,
-            "cl" => conversion = 10.0,
-            "l" => conversion = 1000.0
-            "dash" => conversion = 1.0,
-            "tl" => conversion = 5,
-            "bl" => conversion = 2,
-            "part" => conversion = 40,
-            "el" => conversion = 15,
-            "shot" => conversion = 45,
-            _ => conversion = 0.0                         // or parser error?
-        };
     };
 
-    if value > 0.0 && value <= (u8::max_value() as f64  // is the value valid?
+    if value > 0.0 && value <= (u8::max_value() as f64) // is the value valid?
     {
         ((value * conversion).round()) as u8            // converted to ml and return
     }
