@@ -1,23 +1,16 @@
+#[macro_use] extern crate quick_error;
+
 use std::fmt;
-use std::str::FromStr;
-use regex::Regex;
-use serde::{Deserialize, Serialize};
+mod thecocktaildb;
+use thecocktaildb::{Thecocktaildb};
+mod cocktail;
+use cocktail::{Cocktail, Ingredient, GenericCocktail};
+mod cocktailor;
 
 fn main()
 {
-    /* TEST
-    let mut measure: String;
-    measure = String::from("1 1/2 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("1/2 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("10  oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("1 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("10 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("1    oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("90/60 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    measure = String::from("1.5 oz"); println!("{} = {} ml", measure, convert_measure(&measure.as_str()));
-    */
-
-    let imported: Thecocktaildb = serde_json::from_str
+    let mut imported: Thecocktaildb = Default::default();// serde_json::from_str
+    imported.from_str
     (
         r#"
             {
@@ -50,114 +43,19 @@ fn main()
         "#
     ).unwrap();
 
-    let mut converted = Cocktail::default();
-    converted.name = imported.drinks[0].strDrink.clone();
-    converted.glass = imported.drinks[0].strGlass.clone();
-    converted.category = imported.drinks[0].strCategory.clone().unwrap();
-    converted.stir = true;  // no field in thecocktaildb
-    if imported.drinks[0].strIngredient1.is_some() && imported.drinks[0].strMeasure1.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure1.clone().unwrap()),
-          name: imported.drinks[0].strIngredient1.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient2.is_some() && imported.drinks[0].strMeasure2.is_some()
-    {
-        println!("{}", imported.drinks[0].strMeasure2.as_ref().unwrap());
-      converted.ingredients.push(Ingredient {amount: convert_measure(imported.drinks[0].strMeasure2.as_ref().unwrap()),
-          name: imported.drinks[0].strIngredient2.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient3.is_some() && imported.drinks[0].strMeasure3.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure3.clone().unwrap()),
-          name: imported.drinks[0].strIngredient3.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient4.is_some() && imported.drinks[0].strMeasure4.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure4.clone().unwrap()),
-          name: imported.drinks[0].strIngredient4.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient5.is_some() && imported.drinks[0].strMeasure5.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure5.clone().unwrap()),
-          name: imported.drinks[0].strIngredient5.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient6.is_some() && imported.drinks[0].strMeasure6.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure6.clone().unwrap()),
-          name: imported.drinks[0].strIngredient6.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient7.is_some() && imported.drinks[0].strMeasure7.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure7.clone().unwrap()),
-          name: imported.drinks[0].strIngredient7.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient8.is_some() && imported.drinks[0].strMeasure8.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure8.clone().unwrap()),
-          name: imported.drinks[0].strIngredient8.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient9.is_some() && imported.drinks[0].strMeasure9.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure9.clone().unwrap()),
-          name: imported.drinks[0].strIngredient9.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient10.is_some() && imported.drinks[0].strMeasure10.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure10.clone().unwrap()),
-          name: imported.drinks[0].strIngredient10.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient11.is_some() && imported.drinks[0].strMeasure11.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure11.clone().unwrap()),
-          name: imported.drinks[0].strIngredient11.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient12.is_some() && imported.drinks[0].strMeasure12.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure12.clone().unwrap()),
-          name: imported.drinks[0].strIngredient12.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient13.is_some() && imported.drinks[0].strMeasure13.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure13.clone().unwrap()),
-          name: imported.drinks[0].strIngredient13.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient14.is_some() && imported.drinks[0].strMeasure14.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure14.clone().unwrap()),
-          name: imported.drinks[0].strIngredient14.clone().unwrap()});
-    };
-    if imported.drinks[0].strIngredient15.is_some() && imported.drinks[0].strMeasure15.is_some()
-    {
-      converted.ingredients.push(Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure15.clone().unwrap()),
-          name: imported.drinks[0].strIngredient15.clone().unwrap()});
-    };
-    converted.garnish = String::from("");
-    converted.preparation = imported.drinks[0].strInstructions.clone();
+    // println!("{:?}", imported.drinks[0].convert_to());
 
-    println!("{:?}", converted);
-
-    /*
-    let converted = Cocktail
-    {
-        name: imported.drinks[0].strDrink.clone(),
-        glass: imported.drinks[0].strGlass.clone(),
-        category: imported.drinks[0].strCategory.clone().unwrap(),
-        stir: true,  // no field in thecocktaildb
-        ingredients: vec!
-        [
-          Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure1), name: imported.drinks[0].strIngredient1.clone()},
-          Ingredient {amount: convert_measure(&imported.drinks[0].strMeasure2), name: imported.drinks[0].strIngredient2.clone()}
-        ],
-        garnish: String::from(""),
-        preparation: imported.drinks[0].strInstructions.clone()
-    };*/
-
+    let mut web: Thecocktaildb = Default::default();
+    web.from_api("1","11007").unwrap();
+    println!("{:?}", web.drinks[0].convert_to());
+    // assert_eq!(imported, web);  // implement ParialEq first
+/*
     let screwdriver = Cocktail
     {
         name: String::from("Screwdriver"),
         glass: String::from("Highball"),
         category: String::from("All Day"),
-		stir: true,
+		shaken_not_stirred: Some(true),
         ingredients: vec!
         [
           Ingredient {amount: 20, name: String::from("Vodka")},
@@ -195,7 +93,7 @@ fn main()
     println!("{}", screwdriver.preparation);
     println!("Garnish with {}", screwdriver.garnish);
     println!("Enjoy!");
-
+*/
 	let bot = Cocktailbot
 	{
 		config: Config {display: false},
@@ -273,43 +171,6 @@ impl Cocktailbot
 	}
     // fn display()
 }
-
-#[derive(Debug)]
-pub struct Ingredient
-{
-    amount: u8,                 // in ml
-    name: String
-}
-
-#[derive(Debug)]
-pub struct Cocktail
-{
-    name: String,
-    glass: String,
-    category: String,
-    ingredients: Vec<Ingredient>,
-    garnish: String,
-	stir: bool,
-    preparation: String
-}
-
-impl Default for Cocktail
-{
-    fn default() -> Cocktail
-    {
-        Cocktail
-        {
-            name: String::from("Empty Glass"),
-            glass: String::from("Any"),
-            category: String::from("All Day"),
-    		stir: false,
-            ingredients: Vec::new(),
-            garnish: String::from("Slice of thin air"),
-            preparation: String::from("Pour nothing into a glass of your choice.")
-        }
-    }
-}
-
 pub struct Config
 {
     display: bool
@@ -347,154 +208,4 @@ impl fmt::Display for BarBotError
     {
         write!(f, "Generic BarBotError")
     }
-}
-
-fn convert_measure(measure: &str) -> u8
-{
-    // a measure consists of a whole number optionally a fraction and a unit. Between whole
-    // number and fraction a whitespace is required Between fraction and unit it's optional.
-    // at one of whole number and fraction and the unit are required.
-    // examples:
-    //      1 1/2 oz
-    //        1/3 oz
-    //      5 oz
-    // spaces before / after the slash are not allowed
-    // (?:) denotes a non-capturing group
-    // (?P<name>) denotes a named capure group
-    //
-    // the regex is:
-    //  ^\s*(?:(?P<whole>\d+){0,1}\s+){0,1}(?:(?P<numerator>\d+)/(?P<denominator>\d+)){0,1}\s*(?P<unit>\w+)
-    //
-    let expr = Regex::new(r"^\s*(?:(?P<whole>\d+){0,1}\s+){0,1}(?:(?P<numerator>\d+)/(?P<denominator>\d+)){0,1}\s*(?P<unit>\w+)").unwrap();
-    let captures = expr.captures(measure).unwrap();     // match regex
-
-    let mut value: f64 = 0.0;
-
-    if captures.name("whole").is_some()                 // check if capture group "whole" has matched
-    {
-        // add the whole number part to value
-        value += captures.name("whole").unwrap().as_str().parse::<f64>().unwrap();
-    };
-
-    // check if there is a fraction (numerator and denominator)
-    if captures.name("numerator").is_some() && captures.name("denominator").is_some()
-    {
-        // get numerator's and denominator's value
-        let numerator = captures.name("numerator").unwrap().as_str().parse::<f64>().unwrap();
-        let denominator = captures.name("denominator").unwrap().as_str().parse::<f64>().unwrap();
-
-        if denominator > 0.0                    // don't divde by zero
-        {
-            value += numerator / denominator;   // add the value of the fractional part
-        };
-    };
-
-    let mut conversion: f64 = 0.0;              // the conversion factor from unit to ml
-
-    if captures.name("unit").is_some()          // check if there is a match for unit
-    {
-        conversion = match captures.name("unit").unwrap().as_str().to_lowercase().as_str()
-        {
-            "oz" => 30.0,
-            "ml" => 1.0,
-            "cl" => 10.0,
-            "dash" => 1.0,
-            "tl" => 5.0,
-            "bl" => 2.0,
-            "part" => 40.0,
-            "el" => 15.0,
-            "shot" => 45.0,
-            _ => 0.0,
-        };
-
-            /*
-                1 oz = 30 ml,
-                1 ml = 1 ml,
-                1 cl = 10 ml,
-                1 l = 1000 ml,
-                1 Dash = 1 ml,
-                1 Tl = 5 ml,
-                1 Bl = 2 ml,
-                1 Part = 40 ml,
-                1 Jigger = 42 ml,
-                1 El = 15 ml,
-                1 Gill = 36 ml,
-                1 Pony = 30 ml,
-                1 Schuss = 1 ml,
-                1 Short = 20 ml,
-                1 Shot = 45 ml
-
-            */
-    };
-
-    if value > 0.0 && value <= (u8::max_value() as f64) // is the value valid?
-    {
-        ((value * conversion).round()) as u8            // converted to ml and return
-    }
-    else
-    {
-        0                                               // something went wrong
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct Thecocktaildb
-{
-    drinks: Vec<ThecocktaildbDrink>
-}
-
-#[derive(Serialize, Deserialize)]
-struct ThecocktaildbDrink
-{
-    idDrink: String,
-    strDrink: String,
-    strDrinkAlternate: Option<String>,
-    strTags: String,
-    strVideo: Option<String>,
-    strCategory: Option<String>,
-    strIBA: Option<String>,
-    strAlcoholic: String,
-    strGlass: String,
-    strInstructions: String,
-    strInstructionsES: Option<String>,
-    strInstructionsDE: Option<String>,
-    strInstructionsFR: Option<String>,
-    strInstructionsIT: Option<String>,
-    strInstructionsZHHANS: Option<String>,
-    strInstructionsZHHANT: Option<String>,
-    strDrinkThumb: Option<String>,
-    strIngredient1: Option<String>,
-    strIngredient2: Option<String>,
-    strIngredient3: Option<String>,
-    strIngredient4: Option<String>,
-    strIngredient5: Option<String>,
-    strIngredient6: Option<String>,
-    strIngredient7: Option<String>,
-    strIngredient8: Option<String>,
-    strIngredient9: Option<String>,
-    strIngredient10: Option<String>,
-    strIngredient11: Option<String>,
-    strIngredient12: Option<String>,
-    strIngredient13: Option<String>,
-    strIngredient14: Option<String>,
-    strIngredient15: Option<String>,
-    strMeasure1: Option<String>,
-    strMeasure2: Option<String>,
-    strMeasure3: Option<String>,
-    strMeasure4: Option<String>,
-    strMeasure5: Option<String>,
-    strMeasure6: Option<String>,
-    strMeasure7: Option<String>,
-    strMeasure8: Option<String>,
-    strMeasure9: Option<String>,
-    strMeasure10: Option<String>,
-    strMeasure11: Option<String>,
-    strMeasure12: Option<String>,
-    strMeasure13: Option<String>,
-    strMeasure14: Option<String>,
-    strMeasure15: Option<String>,
-    strImageSource: Option<String>,
-    strImageAttribution: Option<String>,
-    strCreativeCommonsConfirmed: Option<String>,
-    dateModified: String
 }
