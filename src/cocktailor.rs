@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use crate::cocktail::{GenericCocktail, convert_measure};
 use std::error::Error;
+use std::io;
+use std::io::BufRead;
 
 #[derive(Serialize, Deserialize, Default)]
 struct Cocktailor
@@ -52,6 +54,12 @@ impl CocktailorDB
     pub fn from_str(&mut self, s: &str) -> Result<(), Box<dyn Error>>
     {
         *self = serde_json::from_str(s)?;
+        Ok(())
+    }
+
+    pub fn from_reader<R: BufRead>(&mut self, reader: &mut R) -> io::Result<()>
+    {
+        *self = serde_json::from_reader(reader)?;
         Ok(())
     }
 }

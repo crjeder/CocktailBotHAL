@@ -27,14 +27,14 @@ impl fmt::Display for ConversionError
     }
 }
 */
-#[derive(Debug, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct Ingredient
 {
     pub amount: u8,                 // in ml
     pub name: String
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Cocktail
 {
     pub name: String,
@@ -166,53 +166,53 @@ mod tests {
     #[test]
     fn number_with_fraction()
     {
-        assert_eq!(convert_measure("1 1/2 oz"), 45);
+        assert_eq!(convert_measure("1 1/2 oz").unwrap(), 45);
     }
     #[test]
     fn fraction_only()
     {
-        assert_eq!(convert_measure("1/2 oz"), 15);
+        assert_eq!(convert_measure("1/2 oz").unwrap(), 15);
     }
     #[test]
     fn whole_number()
     {
-        assert_eq!(convert_measure("3 oz"), 90);
+        assert_eq!(convert_measure("3 oz").unwrap(), 90);
     }
     #[test]
     fn decimal()
     {
-        assert_eq!(convert_measure("1.5 oz"), 45);
+        assert_eq!(convert_measure("1.5 oz").unwrap(), 45);
     }
     #[test]
     fn whitespace()
     {
-        assert_eq!(convert_measure("1       oz"), 30);
+        assert_eq!(convert_measure("1       oz").unwrap(), 30);
     }
     #[test]
     #[ignore]
     fn no_whitespace()
     {// currently not implemented
-        assert_eq!(convert_measure("1oz"), 30);
+        assert_eq!(convert_measure("1oz").unwrap(), 30);
     }
     #[test]
-        fn unreduced()
+    fn unreduced()
     {
-        assert_eq!(convert_measure("30/60 oz"), 15);
+        assert_eq!(convert_measure("30/60 oz").unwrap(), 15);
     }
     #[test]
     fn overflow()
     {
-        convert_measure("100 oz");
+        convert_measure("100 oz").unwrap();
     }
     #[test]
     #[should_panic]
     fn unknown()
     {
-        convert_measure("1.5 l");
+        convert_measure("1.5 l").unwrap();
     }
     #[test]
     fn measure_only()
     {
-        convert_measure("oz");
+        convert_measure("oz").unwrap();
     }
 }
