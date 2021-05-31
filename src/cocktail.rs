@@ -1,9 +1,6 @@
 use regex::Regex;
 use std::error::Error;
-use std::num::ParseIntError;
-use std::fmt;
-
-
+use std::str::FromStr;
 
 pub trait GenericCocktail
 {
@@ -12,10 +9,12 @@ pub trait GenericCocktail
 
 quick_error!
 {
-    #[derive(Debug, Clone)]
+    #[derive(Debug)]
     pub enum ConversionError
     {
-        ValueToBig {}
+        IsNegative {}
+        IsToBig {}
+        UnknownUnit(u: String) {}
     }
 }
 /*
@@ -63,28 +62,37 @@ impl Default for Cocktail
     }
 }
 
+/// A measure consists of a whole number optionally a fraction and a unit. Between whole
+/// number and fraction a whitespace is required Between fraction and unit it's optional.
+/// at one of whole number and fraction and the unit are required.
+/// examples:
+///      1 1/2 oz
+///        1/3 oz
+///      5.5 oz
+/// spaces before / after the slash are not allowed
+// (?:) denotes a non-capturing group
+// (?P<name>) denotes a named capure group
+//
 pub fn convert_measure(measure: &str) -> Result<u8, Box<dyn Error>>
 {
-    // a measure consists of a whole number optionally a fraction and a unit. Between whole
-    // number and fraction a whitespace is required Between fraction and unit it's optional.
-    // at one of whole number and fraction and the unit are required.
-    // examples:
-    //      1 1/2 oz
-    //        1/3 oz
-    //      5 oz
-    // spaces before / after the slash are not allowed
-    // (?:) denotes a non-capturing group
-    // (?P<name>) denotes a named capure group
-    //
-    // the regex is:
-    //  ^\s*(?:(?P<whole>\d+){0,1}\s+){0,1}(?:(?P<numerator>\d+)/(?P<denominator>\d+)){0,1}\s*(?P<unit>\w+)
-    //
-    // let expr = Regex::new(r"^\s*(?:(?P<whole>\d+){0,1}\s+){0,1}(?:(?P<numerator>\d+)/(?P<denominator>\d+)){0,1}\s*(?P<unit>\w+)").unwrap();
-    let expr = Regex::new(r"^\s*(?:(?P<whole>\d+(?:\.\d+){0,1})\s+){0,1}(?:(?P<numerator>\d+)/(?P<denominator>\d+)){0,1}\s*(?P<unit>[a-z]+){0,1}")?;
-
-    let captures = expr.captures(measure).unwrap();     // match regex
+    let res = f64::from_str(measure.trim());    // handle the "number only" case
+    if res.is_ok()
+    {
+        let val = res.unwrap().round();
+        if val <= (u8::max_value() as f64)
+        {
+            return Ok(val as u8);
+        }
+        else
+        {
+            return Err(Box::new(ConversionError::IsToBig));    // value > u8:max_value
+        }
+    };
 
     let mut value: Option<f64> = None;
+    let expr = Regex::new(r"^\s*(?:(?P<whole>\d+(?:\.\d+)?)\s+)?(?:(?P<numerator>\d+)/(?P<denominator>\d+))?\s*(?P<unit>[[:alpha:]]+(?:\s+[[:alpha:]]+)?)?")?;
+
+    let captures = expr.captures(measure).unwrap();     // match regex
 
     if captures.name("whole").is_some()                 // check if capture group "whole" has matched
     {
@@ -109,110 +117,71 @@ pub fn convert_measure(measure: &str) -> Result<u8, Box<dyn Error>>
 
     if captures.name("unit").is_some()          // check if there is a match for unit
     {
-        conversion = match captures.name("unit").unwrap().as_str().to_lowercase().as_str()
+        let unit = captures.name("unit").unwrap().as_str().to_lowercase();
+
+        conversion = match unit.as_str()
         {
-            "oz" => 30.0,
-            "ml" => 1.0,
-            "cl" => 10.0,
-            "dash" => 1.0,
-            "tl" => 5.0,
-            "bl" => 2.0,
-            "part" => 40.0,
-            "el" => 15.0,
-            "shot" => 45.0,
-            _ => panic!(), //0.0,
-        };
-
-            /*
-                1 oz = 30 ml,
-                1 ml = 1 ml,
-                1 cl = 10 ml,
-                1 l = 1000 ml,
-                1 Dash = 1 ml,
-                1 Tl = 5 ml,
-                1 Bl = 2 ml,
-                1 Part = 40 ml,
-                1 Jigger = 42 ml,
-                1 El = 15 ml,
-                1 Gill = 36 ml,
-                1 Pony = 30 ml,
-                1 Schuss = 1 ml,
-                1 Short = 20 ml,
-                1 Shot = 45 ml
-
-            */
-    };
-
-    if value.is_some() && value.unwrap() <= (u8::max_value() as f64) // is the value valid?
-    {
-        Ok(((value.unwrap() * conversion).round()) as u8)            // converted to ml and return
+            "oz" => Ok(30.0),
+            "fl oz" => Ok(30.0),
+            "ml" => Ok(1.0),
+            "cl" => Ok(10.0),
+            "dash" => Ok(1.0),
+            "tl" => Ok(5.0),
+            "part" => Ok(40.0),
+            "el" => Ok(15.0),
+            "shot" => Ok(45.0),
+            "can" => Ok(6.0 * 30.0),
+            _ => Err(ConversionError::UnknownUnit(String::from(unit))),
+        }?;
     }
-    else if value.is_none()
+    else    // no unit found => assume int's in ml
     {
-        Ok(conversion.round() as u8)                    // unit without value is trated as
-                                                        // one unit e. g. "oz" -> 1 oz = 30 ml
-                                                        // returns 30
+        conversion = 1.0;
+    }
+
+    if value.is_some()
+    {
+        if value.unwrap() < 0.0
+        {
+            return Err(Box::new(ConversionError::IsNegative))
+        }
+        if value.unwrap() * conversion <= (u8::max_value() as f64) // overflow
+        {
+            Ok(((value.unwrap() * conversion).round()) as u8)            // converted to ml and return
+        }
+        else
+        {
+            return Err(Box::new(ConversionError::IsToBig))    // value > u8:max_value
+        }
     }
     else
     {
-        Err(Box::new(ConversionError::ValueToBig))    // value > u8:max_value
+        return Ok(conversion.round() as u8)         // unit without value is trated as
+                                                    // one unit e. g. "oz" -> 1 oz = 30 ml
+                                                    // returns 30
     }
 }
 
 #[cfg(test)]
 mod tests {
      use super::*;
+     use test_case::test_case;
 
-    #[test]
-    fn number_with_fraction()
+    #[test_case("3 oz" => 90; "Whole number and unit")]
+    #[test_case("1 1/2 oz" => 45; "Reduced fraction > 1")]
+    #[test_case("1/2 oz" => 15; "Reduced fraction")]
+    #[test_case("1       oz" => 30; "lots of whitespaces")]
+    #[test_case("30/60 oz" => 15; "Reduced fraction with big numbers")]
+    #[test_case("oz" => 30; "Unit only")]
+    #[test_case("13" => 13; "Number only")]
+    #[test_case("7 fl oz" => 210; "Multiword Unit")]
+    #[test_case("7/2 oz" => 105; "Improper Fraction")]
+    #[test_case("3.5 oz" => 105; "decimal")]
+    #[test_case("100 oz" => panics "IsToBig"; "overflow")]
+    #[test_case("10.0 l" => panics "UnknownUnit"; "Unknown Unit")]
+    // #[test_case("5oz" => 1inconclusive (); "no spaces")]
+    fn test_convert(s: &str) -> u8
     {
-        assert_eq!(convert_measure("1 1/2 oz").unwrap(), 45);
-    }
-    #[test]
-    fn fraction_only()
-    {
-        assert_eq!(convert_measure("1/2 oz").unwrap(), 15);
-    }
-    #[test]
-    fn whole_number()
-    {
-        assert_eq!(convert_measure("3 oz").unwrap(), 90);
-    }
-    #[test]
-    fn decimal()
-    {
-        assert_eq!(convert_measure("1.5 oz").unwrap(), 45);
-    }
-    #[test]
-    fn whitespace()
-    {
-        assert_eq!(convert_measure("1       oz").unwrap(), 30);
-    }
-    #[test]
-    #[ignore]
-    fn no_whitespace()
-    {// currently not implemented
-        assert_eq!(convert_measure("1oz").unwrap(), 30);
-    }
-    #[test]
-    fn unreduced()
-    {
-        assert_eq!(convert_measure("30/60 oz").unwrap(), 15);
-    }
-    #[test]
-    fn overflow()
-    {
-        convert_measure("100 oz").unwrap();
-    }
-    #[test]
-    #[should_panic]
-    fn unknown()
-    {
-        convert_measure("1.5 l").unwrap();
-    }
-    #[test]
-    fn measure_only()
-    {
-        convert_measure("oz").unwrap();
+        convert_measure(s).unwrap()
     }
 }

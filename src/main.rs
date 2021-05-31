@@ -1,99 +1,31 @@
 #[macro_use] extern crate quick_error;
 
 use std::fmt;
-mod thecocktaildb;
-use thecocktaildb::{Thecocktaildb};
+//mod thecocktaildb;
+//use thecocktaildb::{Thecocktaildb};
 mod cocktail;
-use cocktail::{Cocktail, Ingredient, GenericCocktail};
+use cocktail::{Cocktail, GenericCocktail,convert_measure};
 mod cocktailor;
+mod thecocktaildb;
+mod opendrinks;
+use opendrinks::Opendrinks;
+use std::io::BufReader;
+use std::fs::File;
 
-fn main()
+fn main() -> std::io::Result<()>
 {
-    let mut imported: Thecocktaildb = Default::default();// serde_json::from_str
-    imported.from_str
-    (
-        r#"
-            {
-                "drinks":
-                [
-                    {
-                        "idDrink":"11007",
-                        "strDrink":"Margarita",
-                        "strDrinkAlternate":null,
-                        "strTags":"IBA, ContemporaryClassic",
-                        "strVideo":"null",
-                        "strCategory":"Ordinary Drink",
-                        "strIBA":"Contemporary Classics",
-                        "strAlcoholic":"Alcoholic",
-                        "strGlass":"Cocktail glass",
-                        "strInstructions":"Rub the rim of the glass with the lime slice to make the salt stick to it. Take care to moisten only the outer rim and sprinkle the salt on it. The salt should present to the lips of the imbiber and never mix into the cocktail. Shake the other ingredients with ice, then carefully pour into the glass.",
-                        "strInstructionsES":"null",
-                        "strInstructionsDE":"Reiben Sie den Rand des Glases mit der Limettenscheibe, damit das Salz daran haftet. Achten Sie darauf, dass nur der \u00e4u\u00dfere Rand angefeuchtet wird und streuen Sie das Salz darauf. Das Salz sollte sich auf den Lippen des Genie\u00dfers befinden und niemals in den Cocktail einmischen. Die anderen Zutaten mit Eis sch\u00fctteln und vorsichtig in das Glas geben.",
-                        "strInstructionsFR":null,
-                        "strInstructionsIT":"Strofina il bordo del bicchiere con la fetta di lime per far aderire il sale.\r\nAvere cura di inumidire solo il bordo esterno e cospargere di sale.\r\nIl sale dovrebbe presentarsi alle labbra del bevitore e non mescolarsi mai al cocktail.\r\nShakerare gli altri ingredienti con ghiaccio, quindi versarli delicatamente nel bicchiere.",
-                        "strInstructionsZH-HANS":null,
-                        "strInstructionsZH-HANT":null,
-                        "strDrinkThumb":"https:\/\/www.thecocktaildb.com\/images\/media\/drink\/5noda61589575158.jpg",
-                        "strIngredient1":"Tequila",
-                        "strIngredient2":"Triple sec",
-                        "strIngredient3":"Lime juice",
-                        "strIngredient4":"Salt",
-                        "strIngredient5":null,
-                        "strIngredient6":null,"strIngredient7":null,"strIngredient8":null,"strIngredient9":null,"strIngredient10":null,"strIngredient11":null,"strIngredient12":null,"strIngredient13":null,"strIngredient14":null,"strIngredient15":null,"strMeasure1":"1 1\/2 oz ","strMeasure2":"1\/2 oz ","strMeasure3":"1 oz ","strMeasure4":null,"strMeasure5":null,"strMeasure6":null,"strMeasure7":null,"strMeasure8":null,"strMeasure9":null,"strMeasure10":null,"strMeasure11":null,"strMeasure12":null,"strMeasure13":null,"strMeasure14":null,"strMeasure15":null,"strImageSource":"https:\/\/commons.wikimedia.org\/wiki\/File:Klassiche_Margarita.jpg","strImageAttribution":"Cocktailmarler","strCreativeCommonsConfirmed":"Yes","dateModified":"2015-08-18 14:42:59"}]}
-        "#
-    ).unwrap();
+    println!("converted 13: {}", convert_measure("13").unwrap());
+    let f = File::open("/home/christoph/cocktail_recipes/opendrinks/margarita.json")?;
+    let mut reader = BufReader::new(f);
+    let mut margarita = Opendrinks::default();
+    margarita.from_reader(&mut reader)?;
 
-    // println!("{:?}", imported.drinks[0].convert_to());
+    println!("{:?}", margarita);
+    println!("{:?}", margarita.convert_to().unwrap());
 
-    let mut web: Thecocktaildb = Default::default();
-    web.from_api("1","11007").unwrap();
-    println!("{:?}", web.drinks[0].convert_to());
-    // assert_eq!(imported, web);  // implement ParialEq first
-/*
-    let screwdriver = Cocktail
-    {
-        name: String::from("Screwdriver"),
-        glass: String::from("Highball"),
-        category: String::from("All Day"),
-		shaken_not_stirred: Some(true),
-        ingredients: vec!
-        [
-          Ingredient {amount: 20, name: String::from("Vodka")},
-          Ingredient {amount: 80, name: String::from("Orange Juice")}
-        ],
-        garnish: String::from("Slice of Orange"),
-        preparation: String::from("Pour Vodka and Orange Juice over ice")
-    };
+    Ok(())
+    /*
 
-	let sunrise = Cocktail
-    {
-        name: String::from("Tequila Sunrise"),
-        glass: String::from("Huricane"),
-        category: String::from("Classic"),
-		stir: false,
-        ingredients: vec!
-        [
-          Ingredient {amount: 10, name: String::from("Grenadine")},
-		  Ingredient {amount: 60, name: String::from("Tequila")},
-          Ingredient {amount: 15, name: String::from("Tripple Sec")},
-		  Ingredient {amount: 75, name: String::from("Orange Juice")},
-		  Ingredient {amount: 20, name: String::from("Lime Juice")}
-        ],
-        garnish: String::from("Slice of orange and cherry"),
-        preparation: String::from("Pour Grenadine over ice and then add the other ingredient slowly. Do not stir!")
-    };
-
-    println!("Your Cocktail Choice is:");
-    println!("{}", screwdriver.name);
-    println!("Ingredients:");
-    for liquid in screwdriver.ingredients.iter()
-    {
-        println!("{} ml {}", liquid.amount, liquid.name);
-    }
-    println!("{}", screwdriver.preparation);
-    println!("Garnish with {}", screwdriver.garnish);
-    println!("Enjoy!");
-*/
 	let bot = Cocktailbot
 	{
 		config: Config {display: false},
@@ -125,7 +57,7 @@ fn main()
 			Glass {name: String::from("Tumbler"), volume: 100, weight: 50}
 		],
         cocktails_mixed: 0
-	};
+	};*/
 }
 
 struct Dispenser
@@ -156,19 +88,24 @@ pub struct Cocktailbot
 
 impl Cocktailbot
 {
-	pub fn mix(&mut self, cocktail: Cocktail)
+	pub fn mix(&mut self, cocktail: Cocktail) -> Result<u8, BarBotError>
 	{
-		if self.config.display
+        let mut amout_dispensed = 0u8;
+
+        if self.config.display
         {
             // display(cocktail.name);
         }
 		for ingredient in cocktail.ingredients
 		{
+            amout_dispensed += ingredient.amount;
             // nr = find_dispenser(ingredient);
 			// self.dispenser.dispense(nr, );
         }
 		self.cocktails_mixed += 1;        // record keeping
+        Ok(amout_dispensed)
 	}
+
     // fn display()
 }
 pub struct Config

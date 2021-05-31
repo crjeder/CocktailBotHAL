@@ -187,6 +187,7 @@ impl Thecocktaildb
 mod tests
 {
     use super::*;
+    use crate::cocktail::Cocktail;
 
     #[test]
     fn str()
@@ -242,12 +243,12 @@ mod tests
             "#
         ).unwrap();
 
-        let magerita = Cocktail
+        let magerita: Cocktail = Cocktail
         {
             name: String::from("Margarita"),
             glass: String::from("Cocktail glass"),
             category: String::from("Ordinary Drink"),
-    		shaken_not_stirred: None,
+            shaken_not_stirred: None,
             ingredients: vec!
             [
                 Ingredient {amount: 45, name: String::from("Tequila")},
@@ -258,7 +259,34 @@ mod tests
             garnish: String::from(""),
             preparation: String::from("Rub the rim of the glass with the lime slice to make the salt stick to it. Take care to moisten only the outer rim and sprinkle the salt on it. The salt should present to the lips of the imbiber and never mix into the cocktail. Shake the other ingredients with ice, then carefully pour into the glass.")
         };
+
         assert_eq!(magerita, imported.drinks[0].convert_to().unwrap());
+    }
+    #[test]
+    #[ignore]
+    fn api()
+    {
+        let mut web: Thecocktaildb = Default::default();
+        web.from_api("1","11007").unwrap();
+
+        let magerita: Cocktail = Cocktail
+        {
+            name: String::from("Margarita"),
+            glass: String::from("Cocktail glass"),
+            category: String::from("Ordinary Drink"),
+            shaken_not_stirred: None,
+            ingredients: vec!
+            [
+                Ingredient {amount: 45, name: String::from("Tequila")},
+                Ingredient {amount: 15, name: String::from("Triple sec")},
+                Ingredient {amount: 30, name: String::from("Lime juice")},
+                // Ingredient {amount: 80, name: String::from("Salt")} is not converted since no measure is given
+            ],
+            garnish: String::from(""),
+            preparation: String::from("Rub the rim of the glass with the lime slice to make the salt stick to it. Take care to moisten only the outer rim and sprinkle the salt on it. The salt should present to the lips of the imbiber and never mix into the cocktail. Shake the other ingredients with ice, then carefully pour into the glass.")
+        };
+
+        assert_eq!(magerita, web.drinks[0].convert_to().unwrap());
     }
 }
 
