@@ -18,6 +18,9 @@ tokio = {version = "1", features = ["full"]} # dependeny for reqwest
 #log = "0.4.14" # for logging
 #stderrlog = "0.5.1" # to implement logging
 quick-error = "2.0" # for custom errors
+rocket = "0.4"  # for the REST interface
+serde_derive = "1.0" # for rocket
+rocket_contrib = {version = "0.4.10", features = ["json"]}
 
 [dev-dependencies]
 test-case = "1.1.0"
