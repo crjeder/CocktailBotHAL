@@ -1,3 +1,5 @@
+// module to import recipes from Cocktailor
+
 use crate::cocktail::{convert_measure, GenericCocktail};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
@@ -18,13 +20,15 @@ struct Cocktailor
 struct Ingredient
 {
     unit: String,
-    amount: u8,
+    amount: f32,
     ingredient: String,
 }
+
+//type CocktailorDB = Vec<Cocktailor>;
 #[derive(Serialize, Deserialize, Default)]
 struct CocktailorDB
 {
-    cocktails: Vec<Cocktailor>,
+    cocktail: Vec<Cocktailor>,
 }
 
 impl GenericCocktail for Cocktailor
@@ -40,7 +44,7 @@ impl GenericCocktail for Cocktailor
         for i in self.ingredients.iter()
         {
             converted.ingredients.push(crate::cocktail::Ingredient {
-                amount: (i.amount * convert_measure(&i.unit)?),
+                amount: (i.amount * f32::from(convert_measure(&i.unit)?)).round() as u8,
                 name: i.ingredient.clone(),
             });
         }
@@ -64,5 +68,83 @@ impl CocktailorDB
     {
         *self = serde_json::from_reader(reader)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use crate::cocktail::{Cocktail, GenericCocktail, Ingredient};
+    use std::fs::File;
+    use std::io::prelude::*;
+    use std::io::BufReader;
+
+    #[test]
+    fn from_file()
+    {
+        {
+            let mut file_w = File::create("testdata/vesper.json").unwrap();
+            file_w.write_all(
+                r#"
+                {"cocktail": [
+{ "name": "Vesper",
+"glass": "martini",
+"category": "Before Dinner Cocktail",
+"ingredients": [
+  { "unit": "cl",
+    "amount": 6,
+    "ingredient": "Gin" },
+  { "unit": "cl",
+    "amount": 1.5,
+    "ingredient": "Vodka" },
+  { "unit": "cl",
+    "amount": 0.75,
+    "ingredient": "Lillet Blonde" }
+],
+"garnish": "Lemon twist",
+"preparation": "Shake and strain into a chilled cocktail glass." }
+]}"#
+                .as_bytes()
+            )
+            .unwrap();
+
+            file_w.sync_all().unwrap();
+        }
+        {
+            let file_r = File::open("testdata/vesper.json").unwrap();
+            let mut reader = BufReader::new(file_r);
+            let mut vesper = CocktailorDB::default();
+            vesper.from_reader(&mut reader).unwrap();
+            let my_vesper = Cocktail
+             {
+                 name: String::from("Vesper"),
+                 glass: String::from("martini"),
+                 category: String::from("Before Dinner Cocktail"),
+                 ingredients: vec!
+                 [
+                    Ingredient
+                    {
+                        amount: 60,
+                        name: String::from("Gin")
+                    },
+                    Ingredient
+                    {
+                        amount: 15,
+                        name: String::from("Vodka")
+                    },
+                    Ingredient
+                    {
+                        amount: 8,
+                        name: String::from("Lillet Blonde")
+                    }
+                ],
+                garnish: String::from("Lemon twist"),
+                shaken_not_stirred: None,
+                preparation: String::from("Shake and strain into a chilled cocktail glass.")
+            };
+
+            assert_eq!(my_vesper, vesper.cocktail[0].convert_to().unwrap());
+        }
     }
 }

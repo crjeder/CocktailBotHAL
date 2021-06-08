@@ -1,3 +1,6 @@
+// WIP
+// Generic Cocktail for cocktail_bot_hal
+
 use regex::Regex;
 use std::error::Error;
 use std::str::FromStr;

@@ -1,3 +1,5 @@
+// module to import recipes from TheCocktailDB
+
 use crate::cocktail::{convert_measure, Cocktail, GenericCocktail, Ingredient};
 use reqwest::blocking;
 use serde::{Deserialize, Serialize};
