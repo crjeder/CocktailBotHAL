@@ -1,0 +1,8 @@
+fruity
+creamy
+bitter
+sour
+spirit
+sweet
+fresh
+spicy
