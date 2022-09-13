@@ -2,3 +2,4 @@
 target/
 CocktailBotHAL.code-workspace
 .vscode/
+Cargo.lock
