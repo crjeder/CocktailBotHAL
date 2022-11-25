@@ -4,6 +4,7 @@
 use regex::Regex;
 use std::error::Error;
 use std::str::FromStr;
+use rgb::RGB;
 
 pub trait GenericCocktail
 {
@@ -33,18 +34,20 @@ pub struct Ingredient
 {
     pub amount: u8, // in ml
     pub name: String,
+    pub coulour: Option(RGB),
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct Cocktail
 {
     pub name: String,
-    pub glass: String,
-    pub category: String,
     pub ingredients: Vec<Ingredient>,
-    pub garnish: String,
+    pub glass: Option(String),
+    pub category: Option(String),
+    pub garnish: Option(String),
     pub shaken_not_stirred: Option<bool>,
-    pub preparation: String,
+    pub preparation_instructions: Option(String),
+    pub coulour: Option(RGB),
 }
 
 impl Default for Cocktail
@@ -53,14 +56,15 @@ impl Default for Cocktail
     {
         Cocktail {
             name: String::from("Empty Glass"),
-            glass: String::from("Any"),
-            category: String::from("All Day"),
+            glass: Some(String::from("Any")),
+            category: Some(String::from("All Day")),
             shaken_not_stirred: None,
             ingredients: Vec::new(),
-            garnish: String::from("Slice of thin air"),
-            preparation: String::from(
+            garnish: Some(String::from("Slice of thin air")),
+            preparation_instructions: Some(String::from(
                 "Pour nothing into a glass of your choice.",
-            ),
+            )),
+            coulour: None,
         }
     }
 }
