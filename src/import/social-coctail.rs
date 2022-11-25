@@ -67,13 +67,18 @@ impl SocialCocktails
         // /html/body/div[3]/div[2]/div/div[3]/div/section
         // Selector:
         // #content-home > section
+        //
+        // Title
+        // find(Class("single_header")
+        //
+        // Recipe
+        // find(Class("recipe-content")
+        // Glass
+        // find(Class("cocktail-terms")
       
         // >>>>> ab hier noch nicht geändert
-        if document.find(Name("b")).next().ok_or(LeosError::NotARecipe("No Headline".to_string()))?.text() != "Zutaten"
-        {
-            return Err(LeosError::NotARecipe("Section 'Zutaten' not found".to_string()));
-        }
-        let mut recipe = document.find(Name("h3"));
+        
+        let mut recipe = document.find(Class("recipe-content"))?;
         let name = recipe.next().ok_or(LeosError::NotARecipe("No receipe name found".to_string()))?.text();
 
         let table = document.find(Name("table")).nth(2).ok_or(LeosError::NotARecipe("table of ingredients not found".to_string()))?;
