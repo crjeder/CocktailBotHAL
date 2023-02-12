@@ -2,8 +2,16 @@
 A Harware Abstraction Layer for cocktail mixing robots
 
 WIP
+## 3 Tier Architecture
+### Low Level
+* Init / De-Init
+* Load / Store Config (Blob)
+* Pour (Liquid #; Units) 
 
-## API (with implementaiton hints) 
+Units have to be maped into ml by middle ware
+
+### Middle Ware
+
 * Bot 
   * initialize
   * disable
