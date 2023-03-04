@@ -51,8 +51,9 @@ Units have to be maped into ml by middle ware
 * Static, old fashioned HTML web site to select Cocktails
 
 ## Minimal Software Modules
-- [X] HX711 Driver
+- [X] [HX711 Driver](https://github.com/crjeder/hx711_spi)
 - [ ] Scales functionality (tare and calibration)
+- [x] [PCA9685 Driver](https://github.com/eldruin/pwm-pca9685-rs)
 - [ ] Servo control
 - [ ] Pump control (simply drive it when a valve is opened)
-- [ ] Simplified UI: Traffic litght Green: drink ready or ready for new orders, Red: busy
+- [ ] Simplified UI: Traffic litght Green: drink ready Yellow: ready for new orders, Red: busy
