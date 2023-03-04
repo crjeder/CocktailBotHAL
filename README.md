@@ -45,3 +45,14 @@ Units have to be maped into ml by middle ware
   * leak (pump on pressure bad and not raising)
   * power lost (no valid configuration)
   * cleaning required (counting hours / dispensed liquid / clogging)
+
+# Alternative: quick and dirty
+* Rest API to dispense liquids
+* Static, old fashioned HTML web site to select Cocktails
+
+## Minimal Software Modules
+- [X] HX711 Driver
+- [ ] Scales functionality (tare and calibration)
+- [ ] Servo control
+- [ ] Pump control (simply drive it when a valve is opened)
+- [ ] Simplified UI: Traffic litght Green: drink ready or ready for new orders, Red: busy
