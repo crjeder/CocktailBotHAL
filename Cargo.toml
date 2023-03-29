@@ -20,6 +20,7 @@ tokio = {version = "1", features = ["full"]} # dependeny for reqwest
 quick-error = "2.0" # for custom errors
 rocket = "0.4"  # for the REST interface
 # axum? looks easy to use. -> web server
+#  test it using HTTP mocking via wiremock
 serde_derive = "1.0" # for rocket
 rocket_contrib = {version = "0.4.10", features = ["json"]}
 
