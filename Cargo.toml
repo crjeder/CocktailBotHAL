@@ -11,7 +11,6 @@ regex = "1.5"
 rgb = "0.8"
 #taplo = "0.5.1" # for config files
 #zbar-rust = "0.0.16" # QRcode
-#roy = "0.1" # RESTful API client
 reqwest = {version = "0.11", features = ["json", "blocking"]} # dependeny for roy
 tokio = {version = "1", features = ["full"]} # dependeny for reqwest
 #tokio-test = "0.4"
@@ -20,8 +19,13 @@ tokio = {version = "1", features = ["full"]} # dependeny for reqwest
 #stderrlog = "0.5.1" # to implement logging
 quick-error = "2.0" # for custom errors
 rocket = "0.4"  # for the REST interface
+# axum? looks easy to use. -> web server
+# test it using HTTP mocking via wiremock:
+# https://www.lpalmieri.com/posts/how-to-write-a-rest-client-in-rust-with-reqwest-and-wiremock/#http-mocking-with-wiremock
 serde_derive = "1.0" # for rocket
 rocket_contrib = {version = "0.4.10", features = ["json"]}
+# UI?
+# slint = "1.0.0"
 
 [dev-dependencies]
 test-case = "1.1.0"
