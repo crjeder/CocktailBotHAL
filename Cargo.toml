@@ -2,17 +2,18 @@
 name = "cocktail_bot_hal"
 version = "0.1.0"
 authors = ["crjeder <crjeder@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
+generic_cocktail = {path = "../generic-cocktail", version = "0.1"}
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"   # serialize json for drink recepies
-regex = "1.5"
+#regex = "1.5"
 rgb = "0.8"
 #taplo = "0.5.1" # for config files
 #zbar-rust = "0.0.16" # QRcode
-reqwest = {version = "0.11", features = ["json", "blocking"]} # dependeny for roy
-tokio = {version = "1", features = ["full"]} # dependeny for reqwest
+#reqwest = {version = "0.11", features = ["json", "blocking"]} # dependeny for roy
+#tokio = {version = "1", features = ["full"]} # dependeny for reqwest
 #tokio-test = "0.4"
 #embedded-hal-mock = "0.7.2" # fake hal
 #log = "0.4.14" # for logging
@@ -23,9 +24,9 @@ rocket = "0.4"  # for the REST interface
 # test it using HTTP mocking via wiremock:
 # https://www.lpalmieri.com/posts/how-to-write-a-rest-client-in-rust-with-reqwest-and-wiremock/#http-mocking-with-wiremock
 serde_derive = "1.0" # for rocket
-rocket_contrib = {version = "0.4.10", features = ["json"]}
+#rocket_contrib = {version = "0.4.10", features = ["json"]}
 # UI?
 # slint = "1.0.0"
 
 [dev-dependencies]
-test-case = "1.1.0"
+test-case = "3.2"

@@ -1,24 +1,17 @@
-#![feature(proc_macro_hygiene, decl_macro)]
 #[macro_use] extern crate rocket;
-#[macro_use] extern crate rocket_contrib;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate quick_error;
 
 use std::fmt;
 use std::sync::Mutex;
 
-mod cocktail;
-use cocktail::{convert_measure, Cocktail, GenericCocktail};
-mod cocktailor;
-mod opendrinks;
-mod thecocktaildb;
-use opendrinks::Opendrinks;
+use generic_cocktail::{convert_measure, Cocktail, GenericCocktail};
 
 use rocket::http::Status;
 use rocket::{data, Data, Outcome, Request, State};
-use rocket_contrib::json::{Json, JsonValue};
+//use rocket_contrib::json::{Json, JsonValue};
+use rocket::response::content::Json;
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 
 /// REST API
 ///
@@ -65,8 +58,8 @@ fn mix_cocktail(
     })
 }
 
-fn main() -> std::io::Result<()>
-{
+#[launch]
+fn rocket() -> _ {
     let this_bot: Mutex<Cocktailbot> = Mutex::new(Cocktailbot {
         config: Config { display: false },
         dispenser: Dispenser {
@@ -179,13 +172,8 @@ fn main() -> std::io::Result<()>
         ],
         cocktails_mixed: 0,
     });
-
-    let _rocket = rocket::ignite()
-        .mount("/", routes![index, get_liquids, get_glasses, mix_cocktail])
-        .manage(this_bot)
-        .launch();
-
-    Ok(())
+    
+    rocket::build().mount("/", routes![index, get_liquids, get_glasses, mix_cocktail])
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
