@@ -1,14 +1,17 @@
+#![feature(decl_macro)]
 #[macro_use] extern crate rocket;
+#[macro_use] extern crate rocket_contrib;
 
 use std::fmt;
 use std::sync::Mutex;
 
 use generic_cocktail::{convert_measure, Cocktail, GenericCocktail};
 
-use rocket::http::Status;
-use rocket::{data, Data, Outcome, Request, State};
-//use rocket_contrib::json::{Json, JsonValue};
-use rocket::response::content::Json;
+// use rocket::http::Status;
+// use rocket::{data, Data, Outcome, Request, State};
+use rocket::{Rocket,State};
+use rocket_contrib::json::{Json, JsonValue};
+//use rocket::response::content::Json as ContentJason;
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -40,26 +43,25 @@ fn get_glasses(l: State<Cocktailbot>) -> Option<Json<&Vec<Glass>>>
 
 /// have a drink mixed
 /// http://localhost:8000/REST/post/cocktail
-#[post("/REST/post/cocktail", data = "<recipe>")]
-//fn mix_cocktail(bot: State<Cocktailbot>, recipe: Cocktail) -> Option<Json<BarBotError>>
+//#[post("/REST/post/cocktail", data = "<recipe>")]
+#[post("/REST/post/cocktail", data = "<r>")]
 fn mix_cocktail(
     bot: State<Mutex<Cocktailbot>>,
-    recipe: Json<Cocktail>,
-) -> JsonValue
+    r: u8,
+) -> Json<&'static str>
 {
     let my_bot = &mut bot.inner().lock().unwrap();
-    my_bot.cocktails_mixed += 1;
+    my_bot.cocktails_mixed += r;
 
-    json!
-    ({
-        "status": "success",
-        "cocktail": recipe.name,
-        "cocktails_mixed": my_bot.cocktails_mixed
-    })
+    Json
+    ("{
+        'status': 'success',
+        'cocktail': 'test',
+        'cocktails_mixed': my_bot.cocktails_mixed
+    }")
 }
 
-#[launch]
-fn rocket() -> _ {
+fn main() -> () {
     let this_bot: Mutex<Cocktailbot> = Mutex::new(Cocktailbot {
         config: Config { display: false },
         dispenser: Dispenser {
@@ -173,7 +175,9 @@ fn rocket() -> _ {
         cocktails_mixed: 0,
     });
     
-    rocket::build().mount("/", routes![index, get_liquids, get_glasses, mix_cocktail])
+    let mut r = rocket::ignite().manage(this_bot);
+    r.mount("/", routes![index, get_liquids, get_glasses, mix_cocktail]).launch();
+    
 }
 
 #[derive(Serialize, Deserialize, Default, Debug)]
