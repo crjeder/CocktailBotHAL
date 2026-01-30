@@ -1,0 +1,377 @@
+openapi: 3.1.0
+info:
+  title: Cocktail Robot HAL API
+  version: 1.0.0
+servers:
+  - url: http://robot.local/v1
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+
+    State:
+      type: string
+      enum:
+        - off
+        - booting
+        - self_test
+        - idle
+        - prepared
+        - working
+        - cleaning
+        - drink_ready
+        - error
+
+    ErrorObject:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        hint:
+          type: string
+        recoverable:
+          type: boolean
+
+    LiquidCalibration:
+      type: object
+      properties:
+        ml_per_sec:
+          type: number
+        prime_ms:
+          type: integer
+        viscosity_factor:
+          type: number
+
+    LiquidConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        position:
+          type: integer
+        calibration:
+          $ref: '#/components/schemas/LiquidCalibration'
+
+    Capabilities:
+      type: object
+      properties:
+        level_reporting:
+          type: string
+          enum: [binary, decimal]
+        glass_typing:
+          type: boolean
+        simultaneous_channels:
+          type: integer
+
+    Config:
+      type: object
+      properties:
+        version:
+          type: string
+        liquids:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiquidConfig'
+        part_ml:
+          type: number
+        limits:
+          type: object
+          properties:
+            max_total_parts:
+              type: integer
+            max_channels_per_job:
+              type: integer
+        capabilities:
+          $ref: '#/components/schemas/Capabilities'
+
+    ConfigStoragePayload:
+      type: object
+      properties:
+        data:
+          $ref: '#/components/schemas/Config'
+        valid:
+          type: boolean
+        checksum:
+          type: string
+
+    GlassSensor:
+      type: object
+      properties:
+        present:
+          type: boolean
+        type:
+          type: string
+          nullable: true
+        confidence:
+          type: number
+        updated_at:
+          type: string
+          format: date-time
+
+    LevelBinary:
+      type: object
+      properties:
+        id:
+          type: string
+        mode:
+          type: string
+          enum: [binary]
+        ok:
+          type: boolean
+
+    LevelDecimal:
+      type: object
+      properties:
+        id:
+          type: string
+        mode:
+          type: string
+          enum: [decimal]
+        remaining_ml:
+          type: number
+
+    JobItem:
+      type: object
+      properties:
+        liquid_id:
+          type: string
+        parts:
+          type: number
+
+    JobCreateRequest:
+      type: object
+      properties:
+        client_job_id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobItem'
+        require_glass:
+          type: boolean
+        parallel:
+          type: boolean
+        safety:
+          type: object
+          properties:
+            max_total_parts:
+              type: integer
+            timeout_sec:
+              type: integer
+
+    JobStatus:
+      type: object
+      properties:
+        job_id:
+          type: string
+        client_job_id:
+          type: string
+        state:
+          type: string
+          enum: [queued, running, done, cancelled, error]
+        progress_pct:
+          type: number
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /status:
+    get:
+      summary: Get system status
+      responses:
+        '200':
+          description: OK
+
+  /control/power:
+    post:
+      summary: Power on/off robot hardware
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                on:
+                  type: boolean
+      responses:
+        '202': { description: Accepted }
+
+  /control/power-save:
+    post:
+      summary: Enable or disable power save mode
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+      responses:
+        '200': { description: OK }
+
+  /control/reset:
+    post:
+      summary: Clear error states and reset to idle
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                clear_errors:
+                  type: boolean
+      responses:
+        '200': { description: OK }
+
+  /control/reload-config:
+    post:
+      summary: Reload configuration from storage into active memory
+      responses:
+        '200': { description: Reloaded }
+
+  /config:
+    get:
+      summary: Get active (RAM) configuration
+      responses:
+        '200':
+          description: Active config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Config'
+
+    patch:
+      summary: Update active configuration
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Config'
+      responses:
+        '200': { description: Updated }
+
+  /storage/config:
+    get:
+      summary: Read configuration from non-volatile storage
+      responses:
+        '200':
+          description: Stored config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigStoragePayload'
+
+    post:
+      summary: Write configuration to non-volatile storage
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                data:
+                  $ref: '#/components/schemas/Config'
+                overwrite:
+                  type: boolean
+      responses:
+        '200':
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  written_at: { type: string, format: date-time }
+                  checksum: { type: string }
+                  requires_reboot: { type: boolean }
+
+  /sensors/glass:
+    get:
+      summary: Glass presence and type
+      responses:
+        '200':
+          description: Glass sensor data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GlassSensor'
+
+  /sensors/levels:
+    get:
+      summary: Liquid levels (binary or decimal)
+      responses:
+        '200':
+          description: Levels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  oneOf:
+                    - $ref: '#/components/schemas/LevelBinary'
+                    - $ref: '#/components/schemas/LevelDecimal'
+
+  /dispense/jobs:
+    post:
+      summary: Create a dispensing job
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreateRequest'
+      responses:
+        '202':
+          description: Job accepted
+
+    get:
+      summary: List job queue and history
+      responses:
+        '200':
+          description: Jobs list
+
+  /dispense/jobs/{job_id}:
+    get:
+      summary: Get job status
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatus'
+
+    post:
+      summary: Cancel job
+      responses:
+        '200': { description: Cancelled }
+
+  /cleaning/start:
+    post:
+      summary: Start a simple cleaning program
+      responses:
+        '200': { description: Started }
+
+  /cleaning/stop:
+    post:
+      summary: Stop cleaning
+      responses:
+        '200': { description: Stopped }
+
+  /events:
+    get:
+      summary: Server-Sent Events stream
+      responses:
+        '200':
+          description: SSE stream
