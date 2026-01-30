@@ -1,16 +1,25 @@
 # CocktailBotHAL
 
-A Harware Abstraction Layer for cocktail mixing robots
-Hardware capabilities:
+A Harware Abstraction Layer for remote controll of cocktail mixing robots:
 
 * power on / off robot hardware
 * power safe on / off (may be a alias to power)
-* a display (status, mode(e. g. working, setup, cleaning,..), error condition)
-* non-volatile storage for configuration
-* ability to detect the presence of a glass (optional glass type)
-* ability to dispense n liquids in stable measurement "parts"
-* (optional) test if liquids are used up / measure remaining volume
-
+* status codes:
+ * working
+ * setup, initial self-test
+ * cleaning
+ * drink ready
+ * idle
+ * prepared to dispense dring (i. e. glass present)
+ * error with error code
+* return configuration
+ * nr of liquids
+ * 
+* check presence of a glass (optional glass type)
+* dispense n liquids in stable measurement "parts"
+* return the amout of liquids left (depending on the capability: binary or decimal)
+* read configuration (for non volatile storage)
+* write configuration (back from storage)
 
 ## API (with implementaiton hints)
 
