@@ -17,7 +17,6 @@ components:
       type: string
       enum:
         - off
-        - booting
         - self_test
         - idle
         - prepared
@@ -41,13 +40,9 @@ components:
     LiquidCalibration:
       type: object
       properties:
-        ml_per_sec:
-          type: number
-        prime_ms:
-          type: integer
-        viscosity_factor:
-          type: number
-
+        kv_data:
+          type: string
+        
     LiquidConfig:
       type: object
       properties:
@@ -80,15 +75,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LiquidConfig'
-        part_ml:
-          type: number
         limits:
           type: object
           properties:
             max_total_parts:
-              type: integer
-            max_channels_per_job:
-              type: integer
+              type: integerlö
         capabilities:
           $ref: '#/components/schemas/Capabilities'
 
@@ -155,17 +146,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobItem'
-        require_glass:
-          type: boolean
         parallel:
           type: boolean
-        safety:
-          type: object
-          properties:
-            max_total_parts:
-              type: integer
-            timeout_sec:
-              type: integer
 
     JobStatus:
       type: object
