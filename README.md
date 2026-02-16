@@ -5,12 +5,12 @@ A Harware Abstraction Layer for remote controll of cocktail mixing robots:
 * power on / off robot hardware
 * power safe on / off (may be a alias to power)
 * status codes:
- * working
- * setup, initial self-test
- * cleaning
- * drink ready
- * idle
- * prepared to dispense dring (i. e. glass present)
+  * working
+  * setup, initial self-test
+  * cleaning
+  * drink ready
+  * idle
+* prepared to dispense dring (i. e. glass present)
  * error with error code
 * return configuration
  * nr of liquids
@@ -23,17 +23,17 @@ A Harware Abstraction Layer for remote controll of cocktail mixing robots:
 
 ## API (with implementaiton hints)
 
-* Bot (low level)
-  * initialize
-  * power safe on / off (most power consuming hardware is turned off)
-  * power on / off (everyting is turned off only "watch dog" stays on)
-  * clean (flush the parts wich come into contact with ingredients with water)
-  * calibrate (put sensors in a known state)
-  * write configuration
-  * read configuration (mixer, glasss, recepies, liquids)
-  * mix drink recipe (# or reciepe)
-  * get status
-  * report capabilities ("part" in ml, # of liquids, ..)
+Bot (low level)
+* initialize
+* power safe on / off (most power consuming hardware is turned off)
+* power on / off (everyting is turned off only "watch dog" stays on)
+* clean (flush the parts wich come into contact with ingredients with water)
+* calibrate (put sensors in a known state)
+* write configuration
+* read configuration (mixer, glasss, recepies, liquids)
+* mix drink recipe (# or reciepe)
+* get status
+* report capabilities ("part" in ml, # of liquids, ..)
  
  private API functions
 
