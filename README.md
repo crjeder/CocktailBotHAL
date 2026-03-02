@@ -1,6 +1,6 @@
 # CocktailBotHAL
 
-A Harware Abstraction Layer for remote controll of cocktail mixing robots:
+A Harware Abstraction Layer for remote controll of cocktail mixing robots as a rust trait:
 
 * power on / off robot hardware
 * power safe on / off (may be a alias to power)
