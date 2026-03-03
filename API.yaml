@@ -79,7 +79,7 @@ components:
           type: object
           properties:
             max_total_parts:
-              type: integerlö
+              type: integer
         capabilities:
           $ref: '#/components/schemas/Capabilities'
 
