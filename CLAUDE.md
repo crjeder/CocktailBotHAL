@@ -5,7 +5,7 @@
 **CocktailBotHAL** is a Rust-based Hardware Abstraction Layer (HAL) for remotely
 controlling autonomous cocktail mixing robots via a REST API. It defines a
 trait-based interface that hardware vendors implement, and exposes a standardized
-OpenAPI 3.1.0 HTTP API to clients.
+OpenAPI 3.1.0 HTTP API to clients. To clarify: It abstracts the robot's construction and not the microcontroller (brain) of the robot. It aims to be portable to other microcontrolers but is implemented for ESP32.
 
 - **Language:** Rust (Edition 2021)
 - **License:** GNU GPL v3
