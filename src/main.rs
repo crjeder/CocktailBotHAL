@@ -109,6 +109,7 @@ impl DispenseHal for StubDispenseHal
     {
         todo!()
     }
+    fn list_jobs(&self) -> Vec<JobStatus> { vec![] }
     fn job_status(&self, _job_id: &str) -> Result<JobStatus, ErrorInfo>
     {
         todo!()
