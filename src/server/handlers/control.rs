@@ -1,52 +1,134 @@
 // src/server/handlers/control.rs
 //
 // Handlers for POST /v1/control/*
-//
-// TODO: Implement each handler. Wire handle_power_save, handle_reset, and
-// handle_reload_config into the route dispatch in src/server/mod.rs
-// (currently only handle_power is dispatched).
 
 use embedded_io_async::Write;
+use serde::Deserialize;
 
+use crate::server::http::{self, HttpRequest};
 use crate::server::RobotHal;
 
 /// POST /v1/control/power — power the robot on or off.
-/// Body: { "on": bool }
-/// TODO: Parse body, call hal.control.power(on), return 202 or error JSON.
-pub async fn handle_power<R, W: Write + Unpin>(
-    _hal: &mut RobotHal<'_>,
-    _request: R,
-    _socket: &mut W,
+/// Body: `{ "on": bool }`
+pub async fn handle_power<W: Write + Unpin>(
+    hal: &mut RobotHal<'_>,
+    request: &HttpRequest,
+    socket: &mut W,
 )
 {
-    todo!("Implement POST /v1/control/power")
+    #[derive(Deserialize)]
+    struct Body
+    {
+        on: bool,
+    }
+
+    let body: Body = match http::parse_body(request)
+    {
+        Ok(b) => b,
+        Err(_) =>
+        {
+            http::write_json(
+                socket,
+                400,
+                &serde_json::json!({"error": "invalid request body"}),
+            )
+            .await
+            .ok();
+            return;
+        }
+    };
+
+    match hal.control.power(body.on)
+    {
+        Ok(()) =>
+        {
+            http::write_accepted(socket).await.ok();
+        }
+        Err(e) =>
+        {
+            http::write_hal_error(socket, &e).await.ok();
+        }
+    }
 }
 
 /// POST /v1/control/power-save — enter or exit power-save mode.
-/// Body: { "enabled": bool }
-/// TODO: Parse body, call hal.control.power_save(enabled), return 202.
-pub async fn handle_power_save<R, W: Write + Unpin>(
-    _hal: &mut RobotHal<'_>,
-    _request: R,
-    _socket: &mut W,
+/// Body: `{ "enabled": bool }`
+pub async fn handle_power_save<W: Write + Unpin>(
+    hal: &mut RobotHal<'_>,
+    request: &HttpRequest,
+    socket: &mut W,
 )
 {
-    todo!("Implement POST /v1/control/power-save")
+    #[derive(Deserialize)]
+    struct Body
+    {
+        enabled: bool,
+    }
+
+    let body: Body = match http::parse_body(request)
+    {
+        Ok(b) => b,
+        Err(_) =>
+        {
+            http::write_json(
+                socket,
+                400,
+                &serde_json::json!({"error": "invalid request body"}),
+            )
+            .await
+            .ok();
+            return;
+        }
+    };
+
+    match hal.control.power_save(body.enabled)
+    {
+        Ok(()) =>
+        {
+            http::write_accepted(socket).await.ok();
+        }
+        Err(e) =>
+        {
+            http::write_hal_error(socket, &e).await.ok();
+        }
+    }
 }
 
 /// POST /v1/control/reset — clear errors and return to idle.
-/// TODO: Call hal.control.reset_errors(), return 202 or error JSON.
-pub async fn handle_reset<W: Write + Unpin>(_hal: &mut RobotHal<'_>, _socket: &mut W)
-{
-    todo!("Implement POST /v1/control/reset")
-}
-
-/// POST /v1/control/reload-config — reload config from persistent storage.
-/// TODO: Call hal.control.reload_config(), return 202 or error JSON.
-pub async fn handle_reload_config<W: Write + Unpin>(
-    _hal: &mut RobotHal<'_>,
-    _socket: &mut W,
+pub async fn handle_reset<W: Write + Unpin>(
+    hal: &mut RobotHal<'_>,
+    socket: &mut W,
 )
 {
-    todo!("Implement POST /v1/control/reload-config")
+    match hal.control.reset_errors()
+    {
+        Ok(()) =>
+        {
+            http::write_accepted(socket).await.ok();
+        }
+        Err(e) =>
+        {
+            http::write_hal_error(socket, &e).await.ok();
+        }
+    }
+}
+
+/// POST /v1/control/reload-config — reload config from persistent
+/// storage.
+pub async fn handle_reload_config<W: Write + Unpin>(
+    hal: &mut RobotHal<'_>,
+    socket: &mut W,
+)
+{
+    match hal.control.reload_config()
+    {
+        Ok(()) =>
+        {
+            http::write_accepted(socket).await.ok();
+        }
+        Err(e) =>
+        {
+            http::write_hal_error(socket, &e).await.ok();
+        }
+    }
 }

@@ -3,9 +3,12 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 use embassy_time::Duration;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RobotState {
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RobotState
+{
     Off,
     Booting,
     SelfTest,
@@ -17,44 +20,51 @@ pub enum RobotState {
     Error,
 }
 
-#[derive(Debug, Clone)]
-pub struct ErrorInfo {
+#[derive(Debug, Clone, Serialize)]
+pub struct ErrorInfo
+{
     pub code: String,
     pub message: String,
     pub hint: Option<String>,
     pub recoverable: bool,
 }
 
-#[derive(Debug, Clone)]
-pub struct LiquidCalibration {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiquidCalibration
+{
     pub ml_per_sec: f32,
     pub prime_ms: u32,
     pub viscosity_factor: f32,
 }
 
-#[derive(Debug, Clone)]
-pub struct LiquidConfig {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiquidConfig
+{
     pub id: String,
     pub name: String,
     pub position: u8,
     pub calibration: LiquidCalibration,
 }
 
-#[derive(Debug, Clone)]
-pub struct Capabilities {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Capabilities
+{
     pub level_reporting: LevelReporting,
     pub glass_typing: bool,
     pub simultaneous_channels: u8,
 }
 
-#[derive(Debug, Clone)]
-pub enum LevelReporting {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LevelReporting
+{
     Binary,
     Decimal,
 }
 
-#[derive(Debug, Clone)]
-pub struct RobotConfig {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RobotConfig
+{
     pub version: String,
     pub liquids: Vec<LiquidConfig>,
     pub part_ml: f32,
@@ -63,27 +73,32 @@ pub struct RobotConfig {
     pub capabilities: Capabilities,
 }
 
-#[derive(Debug, Clone)]
-pub struct GlassSensorState {
+#[derive(Debug, Clone, Serialize)]
+pub struct GlassSensorState
+{
     pub present: bool,
     pub glass_type: Option<String>,
     pub confidence: f32,
 }
 
-#[derive(Debug, Clone)]
-pub enum LevelState {
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum LevelState
+{
     Binary { id: String, ok: bool },
     Decimal { id: String, remaining_ml: f32 },
 }
 
-#[derive(Debug, Clone)]
-pub struct JobItem {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct JobItem
+{
     pub liquid_id: String,
     pub parts: u32,
 }
 
 #[derive(Debug, Clone)]
-pub enum JobState {
+pub enum JobState
+{
     Queued,
     Running,
     Done,
@@ -91,8 +106,30 @@ pub enum JobState {
     Error(String),
 }
 
-#[derive(Debug, Clone)]
-pub struct JobStatus {
+impl Serialize for JobState
+{
+    fn serialize<S: serde::Serializer>(
+        &self,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error>
+    {
+        match self
+        {
+            JobState::Queued => serializer.serialize_str("queued"),
+            JobState::Running => serializer.serialize_str("running"),
+            JobState::Done => serializer.serialize_str("done"),
+            JobState::Cancelled =>
+            {
+                serializer.serialize_str("cancelled")
+            }
+            JobState::Error(_) => serializer.serialize_str("error"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct JobStatus
+{
     pub job_id: String,
     pub client_job_id: String,
     pub state: JobState,
@@ -147,6 +184,7 @@ pub trait DispenseHal {
         timeout: Duration,
     ) -> Result<String, ErrorInfo>; // returns job_id
 
+    fn list_jobs(&self) -> Vec<JobStatus>;
     fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo>;
     fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo>;
 }
