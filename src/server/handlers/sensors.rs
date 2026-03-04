@@ -11,22 +11,12 @@ use crate::server::RobotHal;
 pub async fn handle_glass<W: Write + Unpin>(
     hal: &RobotHal<'_>,
     socket: &mut W,
-)
-{
-    match hal.sensors.glass_state()
-    {
-        Ok(state) =>
-        {
-            http::write_json(
-                socket,
-                200,
-                &serde_json::json!(state),
-            )
-            .await
-            .ok();
+) {
+    match hal.sensors.glass_state() {
+        Ok(state) => {
+            http::write_json(socket, 200, &serde_json::json!(state)).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -36,22 +26,14 @@ pub async fn handle_glass<W: Write + Unpin>(
 pub async fn handle_levels<W: Write + Unpin>(
     hal: &RobotHal<'_>,
     socket: &mut W,
-)
-{
-    match hal.sensors.level_state()
-    {
-        Ok(levels) =>
-        {
-            http::write_json(
-                socket,
-                200,
-                &serde_json::json!(levels),
-            )
-            .await
-            .ok();
+) {
+    match hal.sensors.level_state() {
+        Ok(levels) => {
+            http::write_json(socket, 200, &serde_json::json!(levels))
+                .await
+                .ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }

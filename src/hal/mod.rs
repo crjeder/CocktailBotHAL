@@ -2,13 +2,12 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use embassy_time::Duration;
+use core::time::Duration;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RobotState
-{
+pub enum RobotState {
     Off,
     Booting,
     SelfTest,
@@ -21,8 +20,7 @@ pub enum RobotState
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct ErrorInfo
-{
+pub struct ErrorInfo {
     pub code: String,
     pub message: String,
     pub hint: Option<String>,
@@ -30,16 +28,14 @@ pub struct ErrorInfo
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LiquidCalibration
-{
+pub struct LiquidCalibration {
     pub ml_per_sec: f32,
     pub prime_ms: u32,
     pub viscosity_factor: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LiquidConfig
-{
+pub struct LiquidConfig {
     pub id: String,
     pub name: String,
     pub position: u8,
@@ -47,8 +43,7 @@ pub struct LiquidConfig
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Capabilities
-{
+pub struct Capabilities {
     pub level_reporting: LevelReporting,
     pub glass_typing: bool,
     pub simultaneous_channels: u8,
@@ -56,15 +51,13 @@ pub struct Capabilities
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum LevelReporting
-{
+pub enum LevelReporting {
     Binary,
     Decimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RobotConfig
-{
+pub struct RobotConfig {
     pub version: String,
     pub liquids: Vec<LiquidConfig>,
     pub part_ml: f32,
@@ -74,8 +67,7 @@ pub struct RobotConfig
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct GlassSensorState
-{
+pub struct GlassSensorState {
     pub present: bool,
     pub glass_type: Option<String>,
     pub confidence: f32,
@@ -83,22 +75,19 @@ pub struct GlassSensorState
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "mode", rename_all = "snake_case")]
-pub enum LevelState
-{
+pub enum LevelState {
     Binary { id: String, ok: bool },
     Decimal { id: String, remaining_ml: f32 },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct JobItem
-{
+pub struct JobItem {
     pub liquid_id: String,
     pub parts: u32,
 }
 
 #[derive(Debug, Clone)]
-pub enum JobState
-{
+pub enum JobState {
     Queued,
     Running,
     Done,
@@ -106,30 +95,23 @@ pub enum JobState
     Error(String),
 }
 
-impl Serialize for JobState
-{
+impl Serialize for JobState {
     fn serialize<S: serde::Serializer>(
         &self,
         serializer: S,
-    ) -> Result<S::Ok, S::Error>
-    {
-        match self
-        {
+    ) -> Result<S::Ok, S::Error> {
+        match self {
             JobState::Queued => serializer.serialize_str("queued"),
             JobState::Running => serializer.serialize_str("running"),
             JobState::Done => serializer.serialize_str("done"),
-            JobState::Cancelled =>
-            {
-                serializer.serialize_str("cancelled")
-            }
+            JobState::Cancelled => serializer.serialize_str("cancelled"),
             JobState::Error(_) => serializer.serialize_str("error"),
         }
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct JobStatus
-{
+pub struct JobStatus {
     pub job_id: String,
     pub client_job_id: String,
     pub state: JobState,
@@ -157,14 +139,20 @@ pub trait StatusHal {
 /// Active config (RAM)
 pub trait ConfigHal {
     fn get_active_config(&self) -> RobotConfig;
-    fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo>;
+    fn update_active_config(
+        &mut self,
+        cfg: RobotConfig,
+    ) -> Result<(), ErrorInfo>;
 }
 
 /// Persistent config (Flash)
 pub trait StorageHal {
     fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo>;
-    fn store_storage_config(&mut self, cfg: RobotConfig, overwrite: bool)
-        -> Result<(), ErrorInfo>;
+    fn store_storage_config(
+        &mut self,
+        cfg: RobotConfig,
+        overwrite: bool,
+    ) -> Result<(), ErrorInfo>;
 }
 
 /// Sensor access
@@ -194,3 +182,6 @@ pub trait CleaningHal {
     fn start_cleaning(&mut self) -> Result<(), ErrorInfo>;
     fn stop_cleaning(&mut self) -> Result<(), ErrorInfo>;
 }
+
+#[cfg(test)]
+mod tests;

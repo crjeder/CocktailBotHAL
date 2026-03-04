@@ -11,16 +11,12 @@ use crate::server::RobotHal;
 pub async fn handle_start<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     socket: &mut W,
-)
-{
-    match hal.cleaning.start_cleaning()
-    {
-        Ok(()) =>
-        {
+) {
+    match hal.cleaning.start_cleaning() {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -30,16 +26,12 @@ pub async fn handle_start<W: Write + Unpin>(
 pub async fn handle_stop<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     socket: &mut W,
-)
-{
-    match hal.cleaning.stop_cleaning()
-    {
-        Ok(()) =>
-        {
+) {
+    match hal.cleaning.stop_cleaning() {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
