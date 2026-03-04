@@ -10,11 +10,10 @@ A Harware Abstraction Layer for remote controll of cocktail mixing robots as a r
   * cleaning
   * drink ready
   * idle
-* prepared to dispense dring (i. e. glass present)
+* prepared to dispense drink (i. e. glass present)
  * error with error code
 * return configuration
  * nr of liquids
- * 
 * check presence of a glass (optional glass type)
 * dispense n liquids in stable measurement "parts"
 * return the amout of liquids left (depending on the capability: binary or decimal)
