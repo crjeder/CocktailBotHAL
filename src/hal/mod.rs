@@ -100,10 +100,7 @@ pub enum JobState {
 }
 
 impl Serialize for JobState {
-    fn serialize<S: serde::Serializer>(
-        &self,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         match self {
             JobState::Queued => serializer.serialize_str("queued"),
             JobState::Running => serializer.serialize_str("running"),
@@ -128,31 +125,28 @@ pub struct JobStatus {
 
 /// Power / Reset / Reload Config
 pub trait ControlHal {
-    fn power(&mut self, on: bool) -> Result<(), ErrorInfo>;
-    fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo>;
-    fn reset_errors(&mut self) -> Result<(), ErrorInfo>;
-    fn reload_config(&mut self) -> Result<(), ErrorInfo>;
+    async fn power(&mut self, on: bool) -> Result<(), ErrorInfo>;
+    async fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo>;
+    async fn reset_errors(&mut self) -> Result<(), ErrorInfo>;
+    async fn reload_config(&mut self) -> Result<(), ErrorInfo>;
 }
 
 /// Status information
 pub trait StatusHal {
-    fn state(&self) -> RobotState;
-    fn active_errors(&self) -> Vec<ErrorInfo>;
+    async fn state(&self) -> RobotState;
+    async fn active_errors(&self) -> Vec<ErrorInfo>;
 }
 
 /// Active config (RAM)
 pub trait ConfigHal {
-    fn get_active_config(&self) -> RobotConfig;
-    fn update_active_config(
-        &mut self,
-        cfg: RobotConfig,
-    ) -> Result<(), ErrorInfo>;
+    async fn get_active_config(&self) -> RobotConfig;
+    async fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo>;
 }
 
 /// Persistent config (Flash)
 pub trait StorageHal {
-    fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo>;
-    fn store_storage_config(
+    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo>;
+    async fn store_storage_config(
         &mut self,
         cfg: RobotConfig,
         overwrite: bool,
@@ -161,13 +155,13 @@ pub trait StorageHal {
 
 /// Sensor access
 pub trait SensorHal {
-    fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo>;
-    fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo>;
+    async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo>;
+    async fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo>;
 }
 
 /// Create, run, cancel jobs
 pub trait DispenseHal {
-    fn create_job(
+    async fn create_job(
         &mut self,
         client_job_id: String,
         items: Vec<JobItem>,
@@ -176,15 +170,15 @@ pub trait DispenseHal {
         timeout: Duration,
     ) -> Result<String, ErrorInfo>; // returns job_id
 
-    fn list_jobs(&self) -> Vec<JobStatus>;
-    fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo>;
-    fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo>;
+    async fn list_jobs(&self) -> Vec<JobStatus>;
+    async fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo>;
+    async fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo>;
 }
 
 /// Cleaning control
 pub trait CleaningHal {
-    fn start_cleaning(&mut self) -> Result<(), ErrorInfo>;
-    fn stop_cleaning(&mut self) -> Result<(), ErrorInfo>;
+    async fn start_cleaning(&mut self) -> Result<(), ErrorInfo>;
+    async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo>;
 }
 
 #[cfg(test)]

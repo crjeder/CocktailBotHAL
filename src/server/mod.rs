@@ -29,38 +29,49 @@ fn tokens_equal(a: &str, b: &str) -> bool {
     diff == 0
 }
 
-pub struct RobotHal<'a> {
-    pub control: &'a mut dyn ControlHal,
-    pub status: &'a mut dyn StatusHal,
-    pub config: &'a mut dyn ConfigHal,
-    pub storage: &'a mut dyn StorageHal,
-    pub sensors: &'a mut dyn SensorHal,
-    pub dispense: &'a mut dyn DispenseHal,
-    pub cleaning: &'a mut dyn CleaningHal,
+/// Composes all HAL trait implementations into a single struct.
+///
+/// Each field is a concrete owned type bounded by the corresponding HAL
+/// trait. Using generic type parameters (instead of `dyn Trait`) keeps the
+/// code compatible with native `async fn` in traits, which are not
+/// object-safe in Rust's current edition.
+pub struct RobotHal<Ctrl, Stat, Cfg, Stor, Sens, Disp, Clean> {
+    pub control: Ctrl,
+    pub status: Stat,
+    pub config: Cfg,
+    pub storage: Stor,
+    pub sensors: Sens,
+    pub dispense: Disp,
+    pub cleaning: Clean,
 }
 
-pub struct ApiServer<'a> {
-    pub hal: RobotHal<'a>,
+pub struct ApiServer<Ctrl, Stat, Cfg, Stor, Sens, Disp, Clean> {
+    pub hal: RobotHal<Ctrl, Stat, Cfg, Stor, Sens, Disp, Clean>,
 }
 
-impl<'a> ApiServer<'a> {
+impl<
+        Ctrl: ControlHal,
+        Stat: StatusHal,
+        Cfg: ConfigHal,
+        Stor: StorageHal,
+        Sens: SensorHal,
+        Disp: DispenseHal,
+        Clean: CleaningHal,
+    > ApiServer<Ctrl, Stat, Cfg, Stor, Sens, Disp, Clean>
+{
     /// Main server loop — accepts connections on port 80.
     pub async fn run(&mut self, net_stack: embassy_net::Stack<'_>) {
         loop {
             let mut rx_buf = [0u8; 4096];
             let mut tx_buf = [0u8; 4096];
-            let mut socket =
-                TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
+            let mut socket = TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
             socket.accept(80).await.unwrap();
 
             self.handle_connection(&mut socket).await;
         }
     }
 
-    async fn handle_connection<S: Read + Write + Unpin>(
-        &mut self,
-        socket: &mut S,
-    ) {
+    async fn handle_connection<S: Read + Write + Unpin>(&mut self, socket: &mut S) {
         let request = match http::read_http_request(socket).await {
             Ok(r) => r,
             Err(_) => return,
@@ -70,7 +81,7 @@ impl<'a> ApiServer<'a> {
         let path = request.path.as_str();
 
         // Authenticate before dispatching to any handler.
-        let cfg = self.hal.config.get_active_config();
+        let cfg = self.hal.config.get_active_config().await;
         let effective_token = if cfg.token.is_empty() {
             DEFAULT_TOKEN
         } else {
@@ -82,100 +93,72 @@ impl<'a> ApiServer<'a> {
             .map(|tok| tokens_equal(tok, effective_token))
             .unwrap_or(false);
         if !authorized {
-            http::write_json(
-                socket,
-                401,
-                &serde_json::json!({"error": "Unauthorized"}),
-            )
-            .await
-            .ok();
+            http::write_json(socket, 401, &serde_json::json!({"error": "Unauthorized"}))
+                .await
+                .ok();
             return;
         }
 
         match (method, path) {
             // ----- status -----
             ("GET", "/v1/status") => {
-                handlers::status::handle_status(&self.hal, socket).await;
+                handlers::status::handle_status(&self.hal.status, socket).await;
             }
 
             // ----- control -----
             ("POST", "/v1/control/power") => {
-                handlers::control::handle_power(
-                    &mut self.hal,
-                    &request,
-                    socket,
-                )
-                .await;
+                handlers::control::handle_power(&mut self.hal.control, &request, socket).await;
             }
             ("POST", "/v1/control/power-save") => {
-                handlers::control::handle_power_save(
-                    &mut self.hal,
-                    &request,
-                    socket,
-                )
-                .await;
+                handlers::control::handle_power_save(&mut self.hal.control, &request, socket).await;
             }
             ("POST", "/v1/control/reset") => {
-                handlers::control::handle_reset(&mut self.hal, socket).await;
+                handlers::control::handle_reset(&mut self.hal.control, socket).await;
             }
             ("POST", "/v1/control/reload-config") => {
-                handlers::control::handle_reload_config(&mut self.hal, socket)
-                    .await;
+                handlers::control::handle_reload_config(&mut self.hal.control, socket).await;
             }
 
             // ----- config -----
             ("GET", "/v1/config") => {
-                handlers::config::handle_config_get(&self.hal, socket).await;
+                handlers::config::handle_config_get(&self.hal.config, socket).await;
             }
             ("PATCH", "/v1/config") => {
-                handlers::config::handle_config_patch(
-                    &mut self.hal,
-                    &request,
-                    socket,
-                )
-                .await;
+                handlers::config::handle_config_patch(&mut self.hal.config, &request, socket).await;
             }
 
             // ----- storage -----
             ("GET", "/v1/storage/config") => {
-                handlers::config::handle_storage_read(&self.hal, socket).await;
+                handlers::config::handle_storage_read(&self.hal.storage, socket).await;
             }
             ("POST", "/v1/storage/config") => {
-                handlers::config::handle_storage_write(
-                    &mut self.hal,
-                    &request,
-                    socket,
-                )
-                .await;
+                handlers::config::handle_storage_write(&mut self.hal.storage, &request, socket)
+                    .await;
             }
 
             // ----- sensors -----
             ("GET", "/v1/sensors/glass") => {
-                handlers::sensors::handle_glass(&self.hal, socket).await;
+                handlers::sensors::handle_glass(&self.hal.sensors, socket).await;
             }
             ("GET", "/v1/sensors/levels") => {
-                handlers::sensors::handle_levels(&self.hal, socket).await;
+                handlers::sensors::handle_levels(&self.hal.sensors, socket).await;
             }
 
             // ----- dispense (collection) -----
             ("POST", "/v1/dispense/jobs") => {
-                handlers::dispense::handle_create_job(
-                    &mut self.hal,
-                    &request,
-                    socket,
-                )
-                .await;
+                handlers::dispense::handle_create_job(&mut self.hal.dispense, &request, socket)
+                    .await;
             }
             ("GET", "/v1/dispense/jobs") => {
-                handlers::dispense::handle_list_jobs(&self.hal, socket).await;
+                handlers::dispense::handle_list_jobs(&self.hal.dispense, socket).await;
             }
 
             // ----- cleaning -----
             ("POST", "/v1/cleaning/start") => {
-                handlers::cleaning::handle_start(&mut self.hal, socket).await;
+                handlers::cleaning::handle_start(&mut self.hal.cleaning, socket).await;
             }
             ("POST", "/v1/cleaning/stop") => {
-                handlers::cleaning::handle_stop(&mut self.hal, socket).await;
+                handlers::cleaning::handle_stop(&mut self.hal.cleaning, socket).await;
             }
 
             // ----- dynamic paths & fallback -----
@@ -185,13 +168,15 @@ impl<'a> ApiServer<'a> {
                     match method {
                         "GET" => {
                             handlers::dispense::handle_job_status(
-                                &self.hal, job_id, socket,
+                                &self.hal.dispense,
+                                job_id,
+                                socket,
                             )
                             .await;
                         }
                         "POST" => {
                             handlers::dispense::handle_cancel_job(
-                                &mut self.hal,
+                                &mut self.hal.dispense,
                                 job_id,
                                 socket,
                             )
@@ -208,13 +193,9 @@ impl<'a> ApiServer<'a> {
                         }
                     }
                 } else {
-                    http::write_json(
-                        socket,
-                        404,
-                        &serde_json::json!({"error": "not found"}),
-                    )
-                    .await
-                    .ok();
+                    http::write_json(socket, 404, &serde_json::json!({"error": "not found"}))
+                        .await
+                        .ok();
                 }
             }
         }

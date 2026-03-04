@@ -28,12 +28,12 @@ fn not_implemented() -> ErrorInfo {
 }
 
 impl StorageHal for Esp32Storage {
-    fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
+    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
         // TODO: wire to hardware — read RobotConfig from NVS flash
         Err(not_implemented())
     }
 
-    fn store_storage_config(
+    async fn store_storage_config(
         &mut self,
         _cfg: RobotConfig,
         _overwrite: bool,

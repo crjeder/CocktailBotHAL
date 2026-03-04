@@ -15,22 +15,22 @@ impl Esp32Control {
 }
 
 impl ControlHal for Esp32Control {
-    fn power(&mut self, _on: bool) -> Result<(), ErrorInfo> {
+    async fn power(&mut self, _on: bool) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — toggle main power relay / deep-sleep
         Ok(())
     }
 
-    fn power_save(&mut self, _enabled: bool) -> Result<(), ErrorInfo> {
+    async fn power_save(&mut self, _enabled: bool) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — configure ESP32 light-sleep or reduce clock
         Ok(())
     }
 
-    fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
+    async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — clear fault latches, reset error state
         Ok(())
     }
 
-    fn reload_config(&mut self) -> Result<(), ErrorInfo> {
+    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — reload config from NVS flash
         Ok(())
     }

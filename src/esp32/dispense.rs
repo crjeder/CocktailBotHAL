@@ -18,7 +18,7 @@ impl Esp32Dispense {
 }
 
 impl DispenseHal for Esp32Dispense {
-    fn create_job(
+    async fn create_job(
         &mut self,
         client_job_id: String,
         _items: Vec<JobItem>,
@@ -31,12 +31,12 @@ impl DispenseHal for Esp32Dispense {
         Ok(job_id)
     }
 
-    fn list_jobs(&self) -> Vec<JobStatus> {
+    async fn list_jobs(&self) -> Vec<JobStatus> {
         // TODO: wire to hardware — return job queue from task scheduler
         Vec::new()
     }
 
-    fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
+    async fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
         // TODO: wire to hardware — look up job status in task scheduler
         Err(ErrorInfo {
             code: String::from("NOT_FOUND"),
@@ -46,7 +46,7 @@ impl DispenseHal for Esp32Dispense {
         })
     }
 
-    fn cancel_job(&mut self, _job_id: &str) -> Result<(), ErrorInfo> {
+    async fn cancel_job(&mut self, _job_id: &str) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — cancel job in task scheduler
         Ok(())
     }

@@ -16,12 +16,12 @@ impl Esp32Status {
 }
 
 impl StatusHal for Esp32Status {
-    fn state(&self) -> RobotState {
+    async fn state(&self) -> RobotState {
         // TODO: wire to hardware — read actual state from shared state machine
         RobotState::Idle
     }
 
-    fn active_errors(&self) -> Vec<ErrorInfo> {
+    async fn active_errors(&self) -> Vec<ErrorInfo> {
         // TODO: wire to hardware — read from error ring buffer
         Vec::new()
     }

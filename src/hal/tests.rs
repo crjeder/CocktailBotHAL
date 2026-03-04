@@ -111,7 +111,10 @@ struct MockStatusHal {
 
 impl MockStatusHal {
     fn new() -> Self {
-        Self { state: RobotState::Off, errors: vec![] }
+        Self {
+            state: RobotState::Off,
+            errors: vec![],
+        }
     }
 
     fn with_state(mut self, state: RobotState) -> Self {
@@ -146,7 +149,10 @@ struct MockConfigHal {
 
 impl MockConfigHal {
     fn new() -> Self {
-        Self { config: test_config(), fail_next: None }
+        Self {
+            config: test_config(),
+            fail_next: None,
+        }
     }
 }
 
@@ -155,10 +161,7 @@ impl ConfigHal for MockConfigHal {
         self.config.clone()
     }
 
-    fn update_active_config(
-        &mut self,
-        cfg: RobotConfig,
-    ) -> Result<(), ErrorInfo> {
+    fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
@@ -178,7 +181,10 @@ struct MockStorageHal {
 
 impl MockStorageHal {
     fn new() -> Self {
-        Self { stored: None, fail_next: None }
+        Self {
+            stored: None,
+            fail_next: None,
+        }
     }
 }
 
@@ -192,11 +198,7 @@ impl StorageHal for MockStorageHal {
         })
     }
 
-    fn store_storage_config(
-        &mut self,
-        cfg: RobotConfig,
-        overwrite: bool,
-    ) -> Result<(), ErrorInfo> {
+    fn store_storage_config(&mut self, cfg: RobotConfig, overwrite: bool) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
@@ -309,14 +311,16 @@ impl DispenseHal for MockDispenseHal {
     }
 
     fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
-        self.jobs.iter().find(|j| j.job_id == job_id).cloned().ok_or_else(
-            || ErrorInfo {
+        self.jobs
+            .iter()
+            .find(|j| j.job_id == job_id)
+            .cloned()
+            .ok_or_else(|| ErrorInfo {
                 code: String::from("NOT_FOUND"),
                 message: format!("Job {} not found", job_id),
                 hint: None,
                 recoverable: false,
-            },
-        )
+            })
     }
 
     fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo> {
@@ -345,7 +349,10 @@ struct MockCleaningHal {
 
 impl MockCleaningHal {
     fn new() -> Self {
-        Self { cleaning: false, fail_next: None }
+        Self {
+            cleaning: false,
+            fail_next: None,
+        }
     }
 }
 
@@ -627,8 +634,10 @@ fn sensor_levels_empty() {
 #[test]
 fn sensor_levels_binary() {
     let mut hal = MockSensorHal::new();
-    hal.levels =
-        vec![LevelState::Binary { id: String::from("vodka"), ok: true }];
+    hal.levels = vec![LevelState::Binary {
+        id: String::from("vodka"),
+        ok: true,
+    }];
     let levels = hal.level_state().unwrap();
     assert_eq!(levels.len(), 1);
     match &levels[0] {
@@ -929,7 +938,10 @@ fn robot_config_json_roundtrip() {
 
 #[test]
 fn job_state_serializes_correctly() {
-    assert_eq!(serde_json::to_string(&JobState::Queued).unwrap(), "\"queued\"");
+    assert_eq!(
+        serde_json::to_string(&JobState::Queued).unwrap(),
+        "\"queued\""
+    );
     assert_eq!(
         serde_json::to_string(&JobState::Running).unwrap(),
         "\"running\""
@@ -985,7 +997,10 @@ fn glass_sensor_state_serializes() {
 
 #[test]
 fn level_state_binary_serializes_with_tag() {
-    let level = LevelState::Binary { id: String::from("vodka"), ok: true };
+    let level = LevelState::Binary {
+        id: String::from("vodka"),
+        ok: true,
+    };
     let json = serde_json::to_string(&level).unwrap();
     let value: serde_json::Value = serde_json::from_str(&json).unwrap();
     assert_eq!(value["mode"], "binary");
@@ -1007,7 +1022,10 @@ fn level_state_decimal_serializes_with_tag() {
 
 #[test]
 fn job_item_json_roundtrip() {
-    let item = JobItem { liquid_id: String::from("gin"), parts: 3 };
+    let item = JobItem {
+        liquid_id: String::from("gin"),
+        parts: 3,
+    };
     let json = serde_json::to_string(&item).unwrap();
     let parsed: JobItem = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.liquid_id, "gin");

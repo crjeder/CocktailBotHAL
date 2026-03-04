@@ -57,6 +57,38 @@
 - Enable test-case crate for parameterized tests if needed
 - Implement real hardware drivers replacing the Stub* types
 
+## Session 2026-03-04 — replace-sync-with-async
+
+**Change:** Proposed and applied `replace-sync-with-async` openspec change. 41 tasks.
+
+**What was done:**
+- `Cargo.toml`: version bumped `0.1.0 → 0.2.0` (semver breaking: public trait interface changed);
+  added `static_cell = "2"`; added `executor-thread` to embassy-executor features
+- `src/hal/mod.rs`: All 7 HAL traits converted to native `async fn` methods
+- `src/server/mod.rs`: `RobotHal` / `ApiServer` converted from `dyn Trait` to 7 generic type
+  parameters (`Ctrl, Stat, Cfg, Stor, Sens, Disp, Clean`) — required because native async fn
+  in traits is not object-safe; all HAL calls get `.await`
+- All 6 handler files updated: each takes only its specific HAL trait as a generic; all calls await
+- `src/server/sse.rs`: `SseServer<'a, Stat, Disp>` — two generic HAL traits; `capture_snapshot` async
+- `src/main.rs`: All 7 stub impls made `async fn`; `fn main()` replaced with embassy spin executor
+  pattern using `StaticCell<Executor>` + `#[embassy_executor::task]`
+- `src/esp32/*.rs`: All 8 ESP32 impl files updated to `async fn`; delegation methods in mod.rs
+  forward with `.await`
+- OpenSpec specs synced: added `async-hal-traits` spec; updated `async-http-server` and
+  `esp32-hal-impl` specs
+
+**Key discovery:** `executor-thread` feature required alongside `arch-spin` to expose
+`embassy_executor::Executor` at the crate root for the `StaticCell<Executor>` pattern.
+
+**Status:** `cargo check` passes (default + `--features esp32`). Change archived.
+
+**Next steps:**
+- Entry point: ESP32 bring-up needs `#[esp_hal::main]` + esp-hal/esp-hal-embassy/esp-wifi deps
+- StorageHal: no concrete implementation (stubs return NOT_IMPLEMENTED error)
+- SSE events: event model not designed yet
+- Automated tests: test-case and embedded-hal-mock are commented out in Cargo.toml
+- API.yaml schema gaps: Config.part_ml, Config.max_channels_per_job, JobCreateRequest fields
+
 ## Session 2026-03-04 — replace-legacy-web-framework
 
 **Change:** Proposed and applied `replace-legacy-web-framework` openspec change.

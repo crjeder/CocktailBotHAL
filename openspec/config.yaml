@@ -47,7 +47,6 @@ context: |
   - Prefer Box<dyn Trait> for composing HAL implementations
   - Custom error enums (e.g. BarBotError)
   - JSON via #[derive(Serialize, Deserialize)]
-  - Do not add dependencies without checking commented-out entries in Cargo.toml first
   - Cargo.lock is gitignored — do not add it
   - No environment variables or .env files; config is hardcoded or loaded via HAL traits
   - Run cargo fmt before every commit

@@ -23,13 +23,16 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::time::Duration;
 
+#[cfg(not(test))]
+use embassy_executor::Executor;
 use hal::{
-    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
-    GlassSensorState, JobItem, JobStatus, LevelState, RobotConfig, RobotState,
-    SensorHal, StatusHal, StorageHal,
+    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobItem,
+    JobStatus, LevelState, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
+#[cfg(not(test))]
+use static_cell::StaticCell;
 
 // ============================================================================
 // Stub HAL implementations
@@ -41,16 +44,16 @@ use server::{ApiServer, RobotHal};
 struct StubControlHal;
 
 impl ControlHal for StubControlHal {
-    fn power(&mut self, _on: bool) -> Result<(), ErrorInfo> {
+    async fn power(&mut self, _on: bool) -> Result<(), ErrorInfo> {
         todo!()
     }
-    fn power_save(&mut self, _enabled: bool) -> Result<(), ErrorInfo> {
+    async fn power_save(&mut self, _enabled: bool) -> Result<(), ErrorInfo> {
         todo!()
     }
-    fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
+    async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
-    fn reload_config(&mut self) -> Result<(), ErrorInfo> {
+    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
 }
@@ -58,10 +61,10 @@ impl ControlHal for StubControlHal {
 struct StubStatusHal;
 
 impl StatusHal for StubStatusHal {
-    fn state(&self) -> RobotState {
+    async fn state(&self) -> RobotState {
         RobotState::Off
     }
-    fn active_errors(&self) -> Vec<ErrorInfo> {
+    async fn active_errors(&self) -> Vec<ErrorInfo> {
         vec![]
     }
 }
@@ -69,13 +72,10 @@ impl StatusHal for StubStatusHal {
 struct StubConfigHal;
 
 impl ConfigHal for StubConfigHal {
-    fn get_active_config(&self) -> RobotConfig {
+    async fn get_active_config(&self) -> RobotConfig {
         todo!()
     }
-    fn update_active_config(
-        &mut self,
-        _cfg: RobotConfig,
-    ) -> Result<(), ErrorInfo> {
+    async fn update_active_config(&mut self, _cfg: RobotConfig) -> Result<(), ErrorInfo> {
         todo!()
     }
 }
@@ -83,10 +83,10 @@ impl ConfigHal for StubConfigHal {
 struct StubStorageHal;
 
 impl StorageHal for StubStorageHal {
-    fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
+    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
         todo!()
     }
-    fn store_storage_config(
+    async fn store_storage_config(
         &mut self,
         _cfg: RobotConfig,
         _overwrite: bool,
@@ -98,10 +98,10 @@ impl StorageHal for StubStorageHal {
 struct StubSensorHal;
 
 impl SensorHal for StubSensorHal {
-    fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
+    async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
         todo!()
     }
-    fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
+    async fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
         todo!()
     }
 }
@@ -109,7 +109,7 @@ impl SensorHal for StubSensorHal {
 struct StubDispenseHal;
 
 impl DispenseHal for StubDispenseHal {
-    fn create_job(
+    async fn create_job(
         &mut self,
         _client_job_id: String,
         _items: Vec<JobItem>,
@@ -119,13 +119,13 @@ impl DispenseHal for StubDispenseHal {
     ) -> Result<String, ErrorInfo> {
         todo!()
     }
-    fn list_jobs(&self) -> Vec<JobStatus> {
+    async fn list_jobs(&self) -> Vec<JobStatus> {
         vec![]
     }
-    fn job_status(&self, _job_id: &str) -> Result<JobStatus, ErrorInfo> {
+    async fn job_status(&self, _job_id: &str) -> Result<JobStatus, ErrorInfo> {
         todo!()
     }
-    fn cancel_job(&mut self, _job_id: &str) -> Result<(), ErrorInfo> {
+    async fn cancel_job(&mut self, _job_id: &str) -> Result<(), ErrorInfo> {
         todo!()
     }
 }
@@ -133,10 +133,10 @@ impl DispenseHal for StubDispenseHal {
 struct StubCleaningHal;
 
 impl CleaningHal for StubCleaningHal {
-    fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
+    async fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
-    fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
+    async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
 }
@@ -144,11 +144,14 @@ impl CleaningHal for StubCleaningHal {
 // ============================================================================
 // Entry point
 //
-// TODO (ESP32 bring-up): Replace this stub with the BSP-provided async entry
-// point.  The typical pattern with esp-hal + esp-hal-embassy is:
+// Runs the embassy spin executor for host/development builds.
+// Constructs all stub HAL instances and creates ApiServer.
+//
+// TODO (ESP32 bring-up): Replace this entire section with the BSP-provided
+// async entry point using esp-hal:
 //
 //   #[esp_hal::main]
-//   async fn main(_spawner: embassy_executor::Spawner) {
+//   async fn main(spawner: embassy_executor::Spawner) {
 //       let peripherals = esp_hal::init(esp_hal::Config::default());
 //       esp_hal_embassy::init(/* timer */);
 //       // initialise embassy-net stack with esp-wifi ...
@@ -158,32 +161,46 @@ impl CleaningHal for StubCleaningHal {
 //           .await;
 //   }
 //
-// embassy-executor's #[embassy_executor::main] macro is only available for
-// cortex-m / riscv32 / avr arch features; std/spin targets use the raw
-// Executor API.  Actual ESP32 deployment will use esp-hal's entry macro.
+// NOTE: #[embassy_executor::main] is unavailable with arch-spin.
+// The spin executor is initialised manually below.
 // ============================================================================
 
 #[cfg(not(test))]
-fn main() {
-    // Placeholder — real MCU entry point is async (see TODO above).
-    let mut control = StubControlHal;
-    let mut status = StubStatusHal;
-    let mut config = StubConfigHal;
-    let mut storage = StubStorageHal;
-    let mut sensors = StubSensorHal;
-    let mut dispense = StubDispenseHal;
-    let mut cleaning = StubCleaningHal;
+static EXECUTOR: StaticCell<Executor> = StaticCell::new();
+
+/// Async stub entry task — constructs all HAL stubs and the API server.
+///
+/// In a real bring-up this function is replaced by the BSP entry point and
+/// wired to actual hardware drivers and a live embassy-net stack.
+#[cfg(not(test))]
+#[embassy_executor::task]
+async fn async_main() {
+    let control = StubControlHal;
+    let status = StubStatusHal;
+    let config = StubConfigHal;
+    let storage = StubStorageHal;
+    let sensors = StubSensorHal;
+    let dispense = StubDispenseHal;
+    let cleaning = StubCleaningHal;
 
     let _server = ApiServer {
         hal: RobotHal {
-            control: &mut control,
-            status: &mut status,
-            config: &mut config,
-            storage: &mut storage,
-            sensors: &mut sensors,
-            dispense: &mut dispense,
-            cleaning: &mut cleaning,
+            control,
+            status,
+            config,
+            storage,
+            sensors,
+            dispense,
+            cleaning,
         },
     };
-    // Real call: _server.run(net_stack).await — inside the BSP async executor.
+    // Real call: _server.run(net_stack).await — wire to embassy-net stack.
+}
+
+#[cfg(not(test))]
+fn main() {
+    let executor = EXECUTOR.init(Executor::new());
+    executor.run(|spawner| {
+        spawner.spawn(async_main()).unwrap();
+    });
 }

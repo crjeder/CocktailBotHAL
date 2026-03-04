@@ -1,8 +1,6 @@
 # TODO — CocktailBotHAL
 
-Open implementation work. The handler stubs have been replaced with real
-implementations, `http_smol` has been replaced with `src/server/http.rs`,
-all API routes are wired, and `list_jobs()` has been added to `DispenseHal`.
+
 
 ---
 
@@ -10,11 +8,12 @@ all API routes are wired, and `list_jobs()` has been added to `DispenseHal`.
 
 ### Entry point: ESP32 async executor
 
-`src/main.rs` contains a synchronous `fn main()` placeholder.
-For ESP32 deployment, replace with the BSP-provided async entry point
-(see the detailed TODO comment in `src/main.rs`). Use `esp-hal` +
-`esp-hal-embassy` — not `#[embassy_executor::main]`, which is only
-available for cortex-m/riscv32/avr targets, not arch-spin/arch-std.
+`src/main.rs` currently runs an embassy spin executor (development mode)
+with stub HAL implementations. For ESP32 deployment, replace the entry
+point with the BSP-provided async entry point (see the detailed TODO
+comment in `src/main.rs`). Use `esp-hal` + `esp-hal-embassy` — not
+`#[embassy_executor::main]`, which is only available for
+cortex-m/riscv32/avr targets, not arch-spin/arch-std.
 
 Add `esp-hal`, `esp-hal-embassy`, `esp-wifi` to `Cargo.toml` and
 add a `#[panic_handler]` and global allocator for the ESP32 target.
@@ -44,8 +43,7 @@ The following items have been implemented and are no longer open:
   in `handle_connection` before dispatch; constant-time comparison; token
   configurable via `RobotConfig::token`; falls back to compile-time default.
 - **Embassy dependencies** — `embassy-net 0.8.0`, `embassy-time 0.5.0`,
-  `embedded-io-async 0.7.0` added to `Cargo.toml`; `cargo check` passes clean.
-
+  `embedded-io-async 0.7.0` added to `Cargo.toml`.
 ---
 
 ## Server-Sent Events (SSE)

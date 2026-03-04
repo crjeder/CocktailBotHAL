@@ -29,9 +29,8 @@ use status::Esp32Status;
 use storage::Esp32Storage;
 
 use crate::hal::{
-    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
-    GlassSensorState, JobItem, JobStatus, LevelState, RobotConfig, RobotState,
-    SensorHal, StatusHal, StorageHal,
+    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobItem,
+    JobStatus, LevelState, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
 };
 
 /// Composite HAL implementation for ESP32.
@@ -70,72 +69,69 @@ impl Esp32Hal {
 // ---------------------------------------------------------------------------
 
 impl ControlHal for Esp32Hal {
-    fn power(&mut self, on: bool) -> Result<(), ErrorInfo> {
-        self.control.power(on)
+    async fn power(&mut self, on: bool) -> Result<(), ErrorInfo> {
+        self.control.power(on).await
     }
 
-    fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo> {
-        self.control.power_save(enabled)
+    async fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo> {
+        self.control.power_save(enabled).await
     }
 
-    fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
-        self.control.reset_errors()
+    async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
+        self.control.reset_errors().await
     }
 
-    fn reload_config(&mut self) -> Result<(), ErrorInfo> {
-        self.control.reload_config()
+    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
+        self.control.reload_config().await
     }
 }
 
 impl StatusHal for Esp32Hal {
-    fn state(&self) -> RobotState {
-        self.status.state()
+    async fn state(&self) -> RobotState {
+        self.status.state().await
     }
 
-    fn active_errors(&self) -> Vec<ErrorInfo> {
-        self.status.active_errors()
+    async fn active_errors(&self) -> Vec<ErrorInfo> {
+        self.status.active_errors().await
     }
 }
 
 impl ConfigHal for Esp32Hal {
-    fn get_active_config(&self) -> RobotConfig {
-        self.config.get_active_config()
+    async fn get_active_config(&self) -> RobotConfig {
+        self.config.get_active_config().await
     }
 
-    fn update_active_config(
-        &mut self,
-        cfg: RobotConfig,
-    ) -> Result<(), ErrorInfo> {
-        self.config.update_active_config(cfg)
+    async fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo> {
+        self.config.update_active_config(cfg).await
     }
 }
 
 impl StorageHal for Esp32Hal {
-    fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
-        self.storage.load_storage_config()
+    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
+        self.storage.load_storage_config().await
     }
 
-    fn store_storage_config(
+    async fn store_storage_config(
         &mut self,
         cfg: RobotConfig,
         overwrite: bool,
     ) -> Result<(), ErrorInfo> {
-        self.storage.store_storage_config(cfg, overwrite)
+        self.storage.store_storage_config(cfg, overwrite).await
     }
 }
 
 impl SensorHal for Esp32Hal {
-    fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
-        self.sensors.glass_state()
+    async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
+        self.sensors.glass_state().await
     }
 
-    fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
-        self.sensors.level_state()
+    async fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
+        self.sensors.level_state().await
     }
 }
 
 impl DispenseHal for Esp32Hal {
-    fn create_job(
+    async fn create_job(
         &mut self,
         client_job_id: String,
         items: Vec<JobItem>,
@@ -143,34 +139,30 @@ impl DispenseHal for Esp32Hal {
         parallel: bool,
         timeout: Duration,
     ) -> Result<String, ErrorInfo> {
-        self.dispense.create_job(
-            client_job_id,
-            items,
-            require_glass,
-            parallel,
-            timeout,
-        )
+        self.dispense
+            .create_job(client_job_id, items, require_glass, parallel, timeout)
+            .await
     }
 
-    fn list_jobs(&self) -> Vec<JobStatus> {
-        self.dispense.list_jobs()
+    async fn list_jobs(&self) -> Vec<JobStatus> {
+        self.dispense.list_jobs().await
     }
 
-    fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
-        self.dispense.job_status(job_id)
+    async fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
+        self.dispense.job_status(job_id).await
     }
 
-    fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo> {
-        self.dispense.cancel_job(job_id)
+    async fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo> {
+        self.dispense.cancel_job(job_id).await
     }
 }
 
 impl CleaningHal for Esp32Hal {
-    fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
-        self.cleaning.start_cleaning()
+    async fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
+        self.cleaning.start_cleaning().await
     }
 
-    fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
-        self.cleaning.stop_cleaning()
+    async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
+        self.cleaning.stop_cleaning().await
     }
 }

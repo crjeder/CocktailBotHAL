@@ -4,17 +4,16 @@
 
 use embedded_io_async::Write;
 
+use crate::hal::SensorHal;
 use crate::server::http;
-use crate::server::RobotHal;
 
 /// GET /v1/sensors/glass — glass presence and type detection.
-pub async fn handle_glass<W: Write + Unpin>(
-    hal: &RobotHal<'_>,
-    socket: &mut W,
-) {
-    match hal.sensors.glass_state() {
+pub async fn handle_glass<Sens: SensorHal, W: Write + Unpin>(sensors: &Sens, socket: &mut W) {
+    match sensors.glass_state().await {
         Ok(state) => {
-            http::write_json(socket, 200, &serde_json::json!(state)).await.ok();
+            http::write_json(socket, 200, &serde_json::json!(state))
+                .await
+                .ok();
         }
         Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
@@ -23,11 +22,8 @@ pub async fn handle_glass<W: Write + Unpin>(
 }
 
 /// GET /v1/sensors/levels — liquid level readings for all channels.
-pub async fn handle_levels<W: Write + Unpin>(
-    hal: &RobotHal<'_>,
-    socket: &mut W,
-) {
-    match hal.sensors.level_state() {
+pub async fn handle_levels<Sens: SensorHal, W: Write + Unpin>(sensors: &Sens, socket: &mut W) {
+    match sensors.level_state().await {
         Ok(levels) => {
             http::write_json(socket, 200, &serde_json::json!(levels))
                 .await

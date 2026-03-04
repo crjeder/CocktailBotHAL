@@ -54,16 +54,16 @@ pub enum HttpError {
 // =========================================================================
 
 /// Read a complete HTTP/1.1 request (headers + body) from `socket`.
-pub async fn read_http_request<S: Read + Unpin>(
-    socket: &mut S,
-) -> Result<HttpRequest, HttpError> {
+pub async fn read_http_request<S: Read + Unpin>(socket: &mut S) -> Result<HttpRequest, HttpError> {
     let mut buf = Vec::new();
     let mut byte = [0u8; 1];
 
     // Read until the end-of-headers marker (\r\n\r\n).
     loop {
-        let n =
-            socket.read(&mut byte).await.map_err(|_| HttpError::ReadFailed)?;
+        let n = socket
+            .read(&mut byte)
+            .await
+            .map_err(|_| HttpError::ReadFailed)?;
         if n == 0 {
             return Err(HttpError::ConnectionClosed);
         }
@@ -76,15 +76,15 @@ pub async fn read_http_request<S: Read + Unpin>(
         }
     }
 
-    let header_str =
-        core::str::from_utf8(&buf).map_err(|_| HttpError::InvalidUtf8)?;
+    let header_str = core::str::from_utf8(&buf).map_err(|_| HttpError::InvalidUtf8)?;
 
     // Parse request line: METHOD PATH HTTP/1.x
-    let request_line =
-        header_str.lines().next().ok_or(HttpError::MalformedRequest)?;
+    let request_line = header_str
+        .lines()
+        .next()
+        .ok_or(HttpError::MalformedRequest)?;
     let mut parts = request_line.split_whitespace();
-    let method: String =
-        parts.next().ok_or(HttpError::MalformedRequest)?.into();
+    let method: String = parts.next().ok_or(HttpError::MalformedRequest)?.into();
     let path: String = parts.next().ok_or(HttpError::MalformedRequest)?.into();
 
     // Parse all headers (key: value), skip the request line.
@@ -119,7 +119,12 @@ pub async fn read_http_request<S: Read + Unpin>(
         body.truncate(read);
     }
 
-    Ok(HttpRequest { method, path, headers, body })
+    Ok(HttpRequest {
+        method,
+        path,
+        headers,
+        body,
+    })
 }
 
 // =========================================================================
@@ -132,8 +137,7 @@ pub async fn write_json<S: Write + Unpin>(
     status: u16,
     body: &serde_json::Value,
 ) -> Result<(), HttpError> {
-    let body_bytes =
-        serde_json::to_vec(body).map_err(|_| HttpError::SerializeFailed)?;
+    let body_bytes = serde_json::to_vec(body).map_err(|_| HttpError::SerializeFailed)?;
     let status_text = status_reason(status);
     let header = format!(
         "HTTP/1.1 {} {}\r\n\
@@ -149,14 +153,15 @@ pub async fn write_json<S: Write + Unpin>(
         .write_all(header.as_bytes())
         .await
         .map_err(|_| HttpError::WriteFailed)?;
-    socket.write_all(&body_bytes).await.map_err(|_| HttpError::WriteFailed)?;
+    socket
+        .write_all(&body_bytes)
+        .await
+        .map_err(|_| HttpError::WriteFailed)?;
     Ok(())
 }
 
 /// Write an HTTP 202 Accepted response with a simple JSON body.
-pub async fn write_accepted<S: Write + Unpin>(
-    socket: &mut S,
-) -> Result<(), HttpError> {
+pub async fn write_accepted<S: Write + Unpin>(socket: &mut S) -> Result<(), HttpError> {
     write_json(socket, 202, &serde_json::json!({"status": "accepted"})).await
 }
 
@@ -185,11 +190,8 @@ pub async fn write_hal_error<S: Write + Unpin>(
 // =========================================================================
 
 /// Deserialize a JSON body from an `HttpRequest`.
-pub fn parse_body<T: serde::de::DeserializeOwned>(
-    request: &HttpRequest,
-) -> Result<T, HttpError> {
-    serde_json::from_slice(&request.body)
-        .map_err(|_| HttpError::DeserializeFailed)
+pub fn parse_body<T: serde::de::DeserializeOwned>(request: &HttpRequest) -> Result<T, HttpError> {
+    serde_json::from_slice(&request.body).map_err(|_| HttpError::DeserializeFailed)
 }
 
 /// Map HTTP status codes to reason phrases.

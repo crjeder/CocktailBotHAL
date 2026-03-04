@@ -10,8 +10,7 @@ use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_io_async::Write;
 
-use crate::hal::{JobStatus, RobotState};
-use crate::server::RobotHal;
+use crate::hal::{DispenseHal, JobStatus, RobotState, StatusHal};
 
 /// SSE server port.
 const SSE_PORT: u16 = 9000;
@@ -61,31 +60,23 @@ async fn write_sse_headers<W: Write + Unpin>(socket: &mut W) -> Result<(), ()> {
 // Snapshot capture and diffing
 // ====================================================================
 
-fn capture_snapshot(hal: &RobotHal<'_>) -> Snapshot {
+async fn capture_snapshot<Stat: StatusHal, Disp: DispenseHal>(
+    status: &Stat,
+    dispense: &Disp,
+) -> Snapshot {
     Snapshot {
-        state: hal.status.state(),
-        jobs: hal.dispense.list_jobs(),
+        state: status.state().await,
+        jobs: dispense.list_jobs().await,
     }
 }
 
 /// Emit `state_change` event for the current state.
-async fn emit_state_event<W: Write + Unpin>(
-    socket: &mut W,
-    state: &RobotState,
-) -> Result<(), ()> {
-    write_sse_event(
-        socket,
-        "state_change",
-        &serde_json::json!({"state": state}),
-    )
-    .await
+async fn emit_state_event<W: Write + Unpin>(socket: &mut W, state: &RobotState) -> Result<(), ()> {
+    write_sse_event(socket, "state_change", &serde_json::json!({"state": state})).await
 }
 
 /// Emit a `job_update` event for a single job.
-async fn emit_job_event<W: Write + Unpin>(
-    socket: &mut W,
-    job: &JobStatus,
-) -> Result<(), ()> {
+async fn emit_job_event<W: Write + Unpin>(socket: &mut W, job: &JobStatus) -> Result<(), ()> {
     write_sse_event(
         socket,
         "job_update",
@@ -105,8 +96,7 @@ fn job_changed(old: &JobStatus, new: &JobStatus) -> bool {
     // JobState doesn't derive PartialEq, so we compare via
     // the progress_pct and serialize the state for comparison.
     old.progress_pct != new.progress_pct
-        || serde_json::to_string(&old.state).ok()
-            != serde_json::to_string(&new.state).ok()
+        || serde_json::to_string(&old.state).ok() != serde_json::to_string(&new.state).ok()
 }
 
 // ====================================================================
@@ -116,18 +106,18 @@ fn job_changed(old: &JobStatus, new: &JobStatus) -> bool {
 /// SSE server that runs on port 9000. Accepts one client at a
 /// time. Each connected client receives an initial snapshot
 /// followed by change events at 500ms polling intervals.
-pub struct SseServer<'a> {
-    pub hal: &'a RobotHal<'a>,
+pub struct SseServer<'a, Stat, Disp> {
+    pub status: &'a Stat,
+    pub dispense: &'a Disp,
 }
 
-impl<'a> SseServer<'a> {
+impl<'a, Stat: StatusHal, Disp: DispenseHal> SseServer<'a, Stat, Disp> {
     /// Main accept loop — listens on port 9000.
     pub async fn run(&self, net_stack: embassy_net::Stack<'_>) {
         loop {
             let mut rx_buf = [0u8; 1024];
             let mut tx_buf = [0u8; 4096];
-            let mut socket =
-                TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
+            let mut socket = TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
             if socket.accept(SSE_PORT).await.is_err() {
                 continue;
             }
@@ -147,7 +137,7 @@ impl<'a> SseServer<'a> {
         }
 
         // Send initial snapshot.
-        let mut prev = capture_snapshot(self.hal);
+        let mut prev = capture_snapshot(self.status, self.dispense).await;
 
         if emit_state_event(socket, &prev.state).await.is_err() {
             return;
@@ -164,7 +154,7 @@ impl<'a> SseServer<'a> {
         loop {
             Timer::after(POLL_INTERVAL).await;
 
-            let current = capture_snapshot(self.hal);
+            let current = capture_snapshot(self.status, self.dispense).await;
             let mut sent_event = false;
 
             // Check for state change.
@@ -177,11 +167,7 @@ impl<'a> SseServer<'a> {
 
             // Check for job changes.
             for new_job in &current.jobs {
-                let changed = match prev
-                    .jobs
-                    .iter()
-                    .find(|old| old.job_id == new_job.job_id)
-                {
+                let changed = match prev.jobs.iter().find(|old| old.job_id == new_job.job_id) {
                     Some(old_job) => job_changed(old_job, new_job),
                     None => true, // new job appeared
                 };
@@ -196,9 +182,7 @@ impl<'a> SseServer<'a> {
 
             if sent_event {
                 last_event_time = Instant::now();
-            } else if Instant::now().duration_since(last_event_time)
-                >= KEEPALIVE_INTERVAL
-            {
+            } else if Instant::now().duration_since(last_event_time) >= KEEPALIVE_INTERVAL {
                 if write_keepalive(socket).await.is_err() {
                     return;
                 }

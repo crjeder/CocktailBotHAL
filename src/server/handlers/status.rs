@@ -4,18 +4,15 @@
 
 use embedded_io_async::Write;
 
+use crate::hal::StatusHal;
 use crate::server::http;
-use crate::server::RobotHal;
 
 /// GET /v1/status — return current robot state and active errors.
 ///
 /// Response: `{ "state": "<RobotState>", "errors": [...] }`
-pub async fn handle_status<W: Write + Unpin>(
-    hal: &RobotHal<'_>,
-    socket: &mut W,
-) {
-    let state = hal.status.state();
-    let errors = hal.status.active_errors();
+pub async fn handle_status<Stat: StatusHal, W: Write + Unpin>(status: &Stat, socket: &mut W) {
+    let state = status.state().await;
+    let errors = status.active_errors().await;
 
     http::write_json(
         socket,

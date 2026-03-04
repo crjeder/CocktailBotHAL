@@ -5,13 +5,13 @@
 use embedded_io_async::Write;
 use serde::Deserialize;
 
+use crate::hal::ControlHal;
 use crate::server::http::{self, HttpRequest};
-use crate::server::RobotHal;
 
 /// POST /v1/control/power — power the robot on or off.
 /// Body: `{ "on": bool }`
-pub async fn handle_power<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_power<Ctrl: ControlHal, W: Write + Unpin>(
+    control: &mut Ctrl,
     request: &HttpRequest,
     socket: &mut W,
 ) {
@@ -34,7 +34,7 @@ pub async fn handle_power<W: Write + Unpin>(
         }
     };
 
-    match hal.control.power(body.on) {
+    match control.power(body.on).await {
         Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
@@ -46,8 +46,8 @@ pub async fn handle_power<W: Write + Unpin>(
 
 /// POST /v1/control/power-save — enter or exit power-save mode.
 /// Body: `{ "enabled": bool }`
-pub async fn handle_power_save<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_power_save<Ctrl: ControlHal, W: Write + Unpin>(
+    control: &mut Ctrl,
     request: &HttpRequest,
     socket: &mut W,
 ) {
@@ -70,7 +70,7 @@ pub async fn handle_power_save<W: Write + Unpin>(
         }
     };
 
-    match hal.control.power_save(body.enabled) {
+    match control.power_save(body.enabled).await {
         Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
@@ -81,11 +81,8 @@ pub async fn handle_power_save<W: Write + Unpin>(
 }
 
 /// POST /v1/control/reset — clear errors and return to idle.
-pub async fn handle_reset<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
-    socket: &mut W,
-) {
-    match hal.control.reset_errors() {
+pub async fn handle_reset<Ctrl: ControlHal, W: Write + Unpin>(control: &mut Ctrl, socket: &mut W) {
+    match control.reset_errors().await {
         Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
@@ -97,11 +94,11 @@ pub async fn handle_reset<W: Write + Unpin>(
 
 /// POST /v1/control/reload-config — reload config from persistent
 /// storage.
-pub async fn handle_reload_config<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_reload_config<Ctrl: ControlHal, W: Write + Unpin>(
+    control: &mut Ctrl,
     socket: &mut W,
 ) {
-    match hal.control.reload_config() {
+    match control.reload_config().await {
         Ok(()) => {
             http::write_accepted(socket).await.ok();
         }

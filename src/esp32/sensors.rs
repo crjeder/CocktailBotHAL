@@ -16,7 +16,7 @@ impl Esp32Sensors {
 }
 
 impl SensorHal for Esp32Sensors {
-    fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
+    async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
         // TODO: wire to hardware — read capacitive / IR glass sensor
         Ok(GlassSensorState {
             present: false,
@@ -25,7 +25,7 @@ impl SensorHal for Esp32Sensors {
         })
     }
 
-    fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
+    async fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
         // TODO: wire to hardware — read level sensors for each liquid channel
         Ok(Vec::new())
     }

@@ -39,8 +39,7 @@ CocktailBotHAL/
 │   └── specs/           # Living specs
 ├── testdata/            # Sample cocktail recipes (manual API testing)
 ├── API.yaml             # OpenAPI 3.1.0 specification
-├── Cargo.toml           # Rust project manifest
-└── rustfmt.toml         # Formatting rules
+└── Cargo.toml           # Rust project manifest
 ```
 
 ---
@@ -50,7 +49,6 @@ CocktailBotHAL/
 ```bash
 cargo check
 cargo build          # Debug build
-cargo build --release
 cargo run            # Starts on port 8000
 ```
 
@@ -71,3 +69,4 @@ No Makefile or Docker. Standard Cargo only.
 - **ESP32 code** (`src/esp32/`) must use only `core` and `alloc` — no `std` imports.
 - Before adding any dependency, check commented-out entries in `Cargo.toml` first.
 - Run `cargo fmt` before every commit.
+- Keep **API.yaml** up-to date

@@ -5,22 +5,20 @@
 use embedded_io_async::Write;
 use serde::Deserialize;
 
-use crate::hal::RobotConfig;
+use crate::hal::{ConfigHal, RobotConfig, StorageHal};
 use crate::server::http::{self, HttpRequest};
-use crate::server::RobotHal;
 
 /// GET /v1/config — return active (RAM) configuration.
-pub async fn handle_config_get<W: Write + Unpin>(
-    hal: &RobotHal<'_>,
-    socket: &mut W,
-) {
-    let cfg = hal.config.get_active_config();
-    http::write_json(socket, 200, &serde_json::json!(cfg)).await.ok();
+pub async fn handle_config_get<Cfg: ConfigHal, W: Write + Unpin>(config: &Cfg, socket: &mut W) {
+    let cfg = config.get_active_config().await;
+    http::write_json(socket, 200, &serde_json::json!(cfg))
+        .await
+        .ok();
 }
 
 /// PATCH /v1/config — update active (RAM) configuration.
-pub async fn handle_config_patch<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_config_patch<Cfg: ConfigHal, W: Write + Unpin>(
+    config: &mut Cfg,
     request: &HttpRequest,
     socket: &mut W,
 ) {
@@ -38,15 +36,11 @@ pub async fn handle_config_patch<W: Write + Unpin>(
         }
     };
 
-    match hal.config.update_active_config(cfg) {
+    match config.update_active_config(cfg).await {
         Ok(()) => {
-            http::write_json(
-                socket,
-                200,
-                &serde_json::json!({"status": "updated"}),
-            )
-            .await
-            .ok();
+            http::write_json(socket, 200, &serde_json::json!({"status": "updated"}))
+                .await
+                .ok();
         }
         Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
@@ -55,11 +49,11 @@ pub async fn handle_config_patch<W: Write + Unpin>(
 }
 
 /// GET /v1/storage/config — read persistent configuration.
-pub async fn handle_storage_read<W: Write + Unpin>(
-    hal: &RobotHal<'_>,
+pub async fn handle_storage_read<Stor: StorageHal, W: Write + Unpin>(
+    storage: &Stor,
     socket: &mut W,
 ) {
-    match hal.storage.load_storage_config() {
+    match storage.load_storage_config().await {
         Ok(cfg) => {
             http::write_json(socket, 200, &serde_json::json!({"data": cfg}))
                 .await
@@ -73,8 +67,8 @@ pub async fn handle_storage_read<W: Write + Unpin>(
 
 /// POST /v1/storage/config — write persistent configuration.
 /// Body: `{ "data": <RobotConfig>, "overwrite": bool }`
-pub async fn handle_storage_write<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_storage_write<Stor: StorageHal, W: Write + Unpin>(
+    storage: &mut Stor,
     request: &HttpRequest,
     socket: &mut W,
 ) {
@@ -99,15 +93,14 @@ pub async fn handle_storage_write<W: Write + Unpin>(
         }
     };
 
-    match hal.storage.store_storage_config(body.data, body.overwrite) {
+    match storage
+        .store_storage_config(body.data, body.overwrite)
+        .await
+    {
         Ok(()) => {
-            http::write_json(
-                socket,
-                200,
-                &serde_json::json!({"success": true}),
-            )
-            .await
-            .ok();
+            http::write_json(socket, 200, &serde_json::json!({"success": true}))
+                .await
+                .ok();
         }
         Err(e) => {
             http::write_hal_error(socket, &e).await.ok();

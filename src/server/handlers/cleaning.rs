@@ -4,15 +4,15 @@
 
 use embedded_io_async::Write;
 
+use crate::hal::CleaningHal;
 use crate::server::http;
-use crate::server::RobotHal;
 
 /// POST /v1/cleaning/start — begin a cleaning program.
-pub async fn handle_start<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_start<Clean: CleaningHal, W: Write + Unpin>(
+    cleaning: &mut Clean,
     socket: &mut W,
 ) {
-    match hal.cleaning.start_cleaning() {
+    match cleaning.start_cleaning().await {
         Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
@@ -23,11 +23,11 @@ pub async fn handle_start<W: Write + Unpin>(
 }
 
 /// POST /v1/cleaning/stop — stop a running cleaning program.
-pub async fn handle_stop<W: Write + Unpin>(
-    hal: &mut RobotHal<'_>,
+pub async fn handle_stop<Clean: CleaningHal, W: Write + Unpin>(
+    cleaning: &mut Clean,
     socket: &mut W,
 ) {
-    match hal.cleaning.stop_cleaning() {
+    match cleaning.stop_cleaning().await {
         Ok(()) => {
             http::write_accepted(socket).await.ok();
         }

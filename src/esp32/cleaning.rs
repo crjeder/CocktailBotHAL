@@ -14,12 +14,12 @@ impl Esp32Cleaning {
 }
 
 impl CleaningHal for Esp32Cleaning {
-    fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
+    async fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — start cleaning pump sequence
         Ok(())
     }
 
-    fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
+    async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
         // TODO: wire to hardware — stop cleaning pump and flush lines
         Ok(())
     }
