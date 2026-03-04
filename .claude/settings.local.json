@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(openspec new change \"esp32-hal-stubs\")",
+      "Bash(openspec status --change \"esp32-hal-stubs\" --json)",
+      "Bash(openspec instructions proposal --change \"esp32-hal-stubs\" --json)",
+      "Bash(openspec instructions design --change \"esp32-hal-stubs\" --json)",
+      "Bash(openspec instructions specs --change \"esp32-hal-stubs\" --json)",
+      "Bash(openspec instructions tasks --change \"esp32-hal-stubs\" --json)",
+      "Bash(openspec status --change \"esp32-hal-stubs\")",
+      "Bash(openspec instructions apply --change \"esp32-hal-stubs\" --json)",
+      "Bash(cargo build --features esp32)",
+      "Bash(cargo build)",
+      "Bash(cargo test)",
+      "Bash(openspec new change \"bearer-token-auth\")",
+      "Bash(openspec status --change \"bearer-token-auth\" --json)",
+      "Bash(openspec instructions proposal --change \"bearer-token-auth\" --json)",
+      "Bash(openspec instructions design --change \"bearer-token-auth\" --json)",
+      "Bash(openspec instructions specs --change \"bearer-token-auth\" --json)"
+    ]
+  }
+}

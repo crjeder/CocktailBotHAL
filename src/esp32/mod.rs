@@ -1,0 +1,176 @@
+// src/esp32/mod.rs
+//
+// ESP32 HAL implementation stubs.
+//
+// This module is compiled only when the `esp32` Cargo feature is enabled.
+// Each sub-module contains a stub struct implementing one group of HAL traits.
+// All stubs return sensible default/placeholder values. Look for
+// `// TODO: wire to hardware` comments to find the points where real
+// peripheral code should be added.
+
+mod cleaning;
+mod config;
+mod control;
+mod dispense;
+mod sensors;
+mod status;
+mod storage;
+
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::time::Duration;
+
+use cleaning::Esp32Cleaning;
+use config::Esp32Config;
+use control::Esp32Control;
+use dispense::Esp32Dispense;
+use sensors::Esp32Sensors;
+use status::Esp32Status;
+use storage::Esp32Storage;
+
+use crate::hal::{
+    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
+    GlassSensorState, JobItem, JobStatus, LevelState, RobotConfig, RobotState,
+    SensorHal, StatusHal, StorageHal,
+};
+
+/// Composite HAL implementation for ESP32.
+///
+/// Bundles all sub-struct implementations and delegates each trait's
+/// methods to the appropriate sub-struct. Construct with
+/// [`Esp32Hal::new()`].
+pub struct Esp32Hal {
+    control: Esp32Control,
+    status: Esp32Status,
+    config: Esp32Config,
+    storage: Esp32Storage,
+    sensors: Esp32Sensors,
+    dispense: Esp32Dispense,
+    cleaning: Esp32Cleaning,
+}
+
+impl Esp32Hal {
+    /// Create a new `Esp32Hal` with all sub-structs initialised to their
+    /// default stub state.
+    pub fn new() -> Self {
+        Esp32Hal {
+            control: Esp32Control::new(),
+            status: Esp32Status::new(),
+            config: Esp32Config::new(),
+            storage: Esp32Storage::new(),
+            sensors: Esp32Sensors::new(),
+            dispense: Esp32Dispense::new(),
+            cleaning: Esp32Cleaning::new(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Trait delegation
+// ---------------------------------------------------------------------------
+
+impl ControlHal for Esp32Hal {
+    fn power(&mut self, on: bool) -> Result<(), ErrorInfo> {
+        self.control.power(on)
+    }
+
+    fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo> {
+        self.control.power_save(enabled)
+    }
+
+    fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
+        self.control.reset_errors()
+    }
+
+    fn reload_config(&mut self) -> Result<(), ErrorInfo> {
+        self.control.reload_config()
+    }
+}
+
+impl StatusHal for Esp32Hal {
+    fn state(&self) -> RobotState {
+        self.status.state()
+    }
+
+    fn active_errors(&self) -> Vec<ErrorInfo> {
+        self.status.active_errors()
+    }
+}
+
+impl ConfigHal for Esp32Hal {
+    fn get_active_config(&self) -> RobotConfig {
+        self.config.get_active_config()
+    }
+
+    fn update_active_config(
+        &mut self,
+        cfg: RobotConfig,
+    ) -> Result<(), ErrorInfo> {
+        self.config.update_active_config(cfg)
+    }
+}
+
+impl StorageHal for Esp32Hal {
+    fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
+        self.storage.load_storage_config()
+    }
+
+    fn store_storage_config(
+        &mut self,
+        cfg: RobotConfig,
+        overwrite: bool,
+    ) -> Result<(), ErrorInfo> {
+        self.storage.store_storage_config(cfg, overwrite)
+    }
+}
+
+impl SensorHal for Esp32Hal {
+    fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
+        self.sensors.glass_state()
+    }
+
+    fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
+        self.sensors.level_state()
+    }
+}
+
+impl DispenseHal for Esp32Hal {
+    fn create_job(
+        &mut self,
+        client_job_id: String,
+        items: Vec<JobItem>,
+        require_glass: bool,
+        parallel: bool,
+        timeout: Duration,
+    ) -> Result<String, ErrorInfo> {
+        self.dispense.create_job(
+            client_job_id,
+            items,
+            require_glass,
+            parallel,
+            timeout,
+        )
+    }
+
+    fn list_jobs(&self) -> Vec<JobStatus> {
+        self.dispense.list_jobs()
+    }
+
+    fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
+        self.dispense.job_status(job_id)
+    }
+
+    fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo> {
+        self.dispense.cancel_job(job_id)
+    }
+}
+
+impl CleaningHal for Esp32Hal {
+    fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
+        self.cleaning.start_cleaning()
+    }
+
+    fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
+        self.cleaning.stop_cleaning()
+    }
+}
