@@ -25,4 +25,4 @@
 
 - [x] 5.1 Run `cargo fmt` to apply formatting rules
 - [x] 5.2 Run `cargo check` one final time to confirm zero errors and zero unexpected warnings
-- [ ] 5.3 Commit with message: "Replace legacy Rocket entry point with embassy async main"
+- [x] 5.3 Commit with message: "Replace legacy Rocket entry point with embassy async main"
