@@ -6,8 +6,14 @@
 // your MCU (STM32, ESP32, RP2040, etc.). See TODO.md for the full list of
 // open work, including the required Cargo.toml dependencies.
 
+// HAL traits and types are a public API for hardware vendors; they will not
+// all be referenced from within the crate itself.
+#![allow(dead_code)]
+
 extern crate alloc;
 
+#[cfg(feature = "esp32")]
+mod esp32;
 mod hal;
 #[cfg(not(test))]
 mod server;

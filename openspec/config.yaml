@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  ## Project
+  CocktailBotHAL is a Rust-based Hardware Abstraction Layer (HAL) for remotely
+  controlling autonomous cocktail mixing robots via a REST API. It abstracts the
+  robot's construction (not the microcontroller). Target platform: ESP32.
+  Crate: cocktail_bot_hal v0.1.0 (Rust Edition 2021, GPL v3).
+  Follow semantic versioning.
+
+  ## Tech Stack
+  - Async networking: embassy-net, embedded-io-async, embassy_time
+  - Serialization: serde 1.0 + derive, serde_json 1.0
+  - Domain logic: generic_cocktail (local path dep at ../generic-cocktail — must be present to build)
+  - Legacy web framework: Rocket 0.4, rocket_contrib 0.4.11
+  - Formatting: rustfmt (brace_style = AlwaysNextLine, control_brace_style = AlwaysNextLine,
+    fn_single_line = true, indent_style = Block, max_width = 80, struct_lit_width = 40)
+  - ESP32 modules must use only core and alloc — no std imports permitted
+
+  ## Architecture
+  Trait-based HAL in src/hal/mod.rs. All hardware implementations must satisfy:
+  - ControlHal: power on/off, power-save, reset errors, reload config
+  - StatusHal: query RobotState, active errors
+  - ConfigHal: get/update active (RAM) RobotConfig
+  - StorageHal: load/store RobotConfig to non-volatile storage
+  - SensorHal: glass detection (GlassSensorState), liquid levels
+  - DispenseHal: create/query/cancel dispensing jobs
+  - CleaningHal: start/stop cleaning programs
+
+  Key types: RobotState enum (Off|Booting|SelfTest|Idle|Prepared|Working|Cleaning|DrinkReady|Error),
+  RobotConfig/LiquidConfig, JobItem/JobStatus, Capabilities.
+
+  RobotHal in src/server/mod.rs composes all HAL trait objects. ApiServer dispatches
+  to handler sub-modules: status, control, config, sensors, dispense, cleaning.
+  Handler sub-modules are the main area of active development.
+
+  Two legacy Rocket implementations exist (src/main.rs and src/api/mod.rs) — both
+  define fn main(). Only one can be the binary entry point; main.rs is current default.
+  Both are being superseded by the async v1 API in API.yaml.
+
+  ## API
+  OpenAPI 3.1.0 spec in API.yaml. Base URL: http://robot.local/v1. Auth: Bearer token.
+  Known issue: typo on line 82 of API.yaml (integerlö → integer); fix before generating stubs.
+
+  ## Code Conventions
+  - Doc comments (///) on all public items (traits, structs, methods)
+  - Prefer Box<dyn Trait> for composing HAL implementations
+  - Custom error enums (e.g. BarBotError)
+  - JSON via #[derive(Serialize, Deserialize)]
+  - Do not add dependencies without checking commented-out entries in Cargo.toml first
+  - Cargo.lock is gitignored — do not add it
+  - No environment variables or .env files; config is hardcoded or loaded via HAL traits
+  - Run cargo fmt before every commit
+
+  ## Constraints
+  - Do NOT break the HAL trait interface in src/hal/mod.rs — it is the public contract
+    for hardware implementors
+  - generic_cocktail local path dep must be present at ../generic-cocktail to build
+  - ESP32 feature-gated code must compile under no_std + alloc only
+
+  ## Open Work
+  - Implement handler sub-modules in src/server/ (status, control, config, sensors, dispense, cleaning)
+  - Reconcile src/main.rs vs src/api/mod.rs; long-term target is the async v1 API
+  - Add automated tests (re-enable test-case dep, add #[cfg(test)] modules)
+  - Implement StorageHal (persistent config read/write defined but not implemented)

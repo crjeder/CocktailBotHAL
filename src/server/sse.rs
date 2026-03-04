@@ -5,7 +5,6 @@
 // and emits typed SSE events to connected clients.
 
 use alloc::format;
-use alloc::string::String;
 use alloc::vec::Vec;
 use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Instant, Timer};
