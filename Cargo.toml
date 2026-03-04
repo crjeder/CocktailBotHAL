@@ -5,11 +5,11 @@ authors = ["crjeder <crjeder@gmail.com>"]
 edition = "2021"
 
 [dependencies]
+embassy-net = { version = "0.8.0", features = ["tcp", "proto-ipv4", "medium-ethernet"] }
+embassy-time = "0.5.0"
+embedded-io-async = "0.7.0"
 serde = {version = "1.0", features = ["derive"]}
 serde_json = "1.0"   # serialize json for drink recepies
-# embassy-net = "..."          # TODO: add correct version for target MCU
-# embedded-io-async = "..."    # TODO: add correct version for target MCU
-# embassy_time = "..."         # TODO: add correct version for target MCU
 #regex = "1.5"
 #rgb = "0.8"
 #taplo = "0.5.1" # for config files
@@ -26,6 +26,9 @@ serde_json = "1.0"   # serialize json for drink recepies
 # https://www.lpalmieri.com/posts/how-to-write-a-rest-client-in-rust-with-reqwest-and-wiremock/#http-mocking-with-wiremock
 # UI?
 # slint = "1.0.0"
+
+[features]
+esp32 = []
 
 [dev-dependencies]
 #test-case = "3.2"

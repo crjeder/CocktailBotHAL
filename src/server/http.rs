@@ -22,7 +22,18 @@ const MAX_HEADER_BYTES: usize = 4096;
 pub struct HttpRequest {
     pub method: String,
     pub path: String,
+    pub headers: Vec<(String, String)>,
     pub body: Vec<u8>,
+}
+
+impl HttpRequest {
+    /// Return the value of the first header matching `name` (case-insensitive).
+    pub fn header(&self, name: &str) -> Option<&str> {
+        self.headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
 }
 
 /// Errors that can occur during HTTP I/O.
@@ -76,12 +87,17 @@ pub async fn read_http_request<S: Read + Unpin>(
         parts.next().ok_or(HttpError::MalformedRequest)?.into();
     let path: String = parts.next().ok_or(HttpError::MalformedRequest)?.into();
 
-    // Find Content-Length header (case-insensitive).
+    // Parse all headers (key: value), skip the request line.
+    let mut headers: Vec<(String, String)> = Vec::new();
     let mut content_length: usize = 0;
     for line in header_str.lines().skip(1) {
-        if line.len() > 16 && line[..15].eq_ignore_ascii_case("content-length:")
-        {
-            content_length = line[15..].trim().parse().unwrap_or(0);
+        if let Some(colon) = line.find(':') {
+            let key = line[..colon].trim().to_string();
+            let value = line[colon + 1..].trim().to_string();
+            if key.eq_ignore_ascii_case("content-length") {
+                content_length = value.parse().unwrap_or(0);
+            }
+            headers.push((key, value));
         }
     }
 
@@ -103,7 +119,7 @@ pub async fn read_http_request<S: Read + Unpin>(
         body.truncate(read);
     }
 
-    Ok(HttpRequest { method, path, body })
+    Ok(HttpRequest { method, path, headers, body })
 }
 
 // =========================================================================
@@ -182,6 +198,7 @@ fn status_reason(code: u16) -> &'static str {
         200 => "OK",
         202 => "Accepted",
         400 => "Bad Request",
+        401 => "Unauthorized",
         404 => "Not Found",
         405 => "Method Not Allowed",
         500 => "Internal Server Error",

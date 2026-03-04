@@ -64,6 +64,10 @@ pub struct RobotConfig {
     pub max_total_parts: u16,
     pub max_channels_per_job: u8,
     pub capabilities: Capabilities,
+    /// Bearer token required to authenticate API requests.
+    /// An empty string causes the server to fall back to the compile-time default.
+    #[serde(default)]
+    pub token: String,
 }
 
 #[derive(Debug, Clone, Serialize)]

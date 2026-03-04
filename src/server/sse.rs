@@ -125,7 +125,10 @@ impl<'a> SseServer<'a> {
     /// Main accept loop — listens on port 9000.
     pub async fn run(&self, net_stack: embassy_net::Stack<'_>) {
         loop {
-            let mut socket = TcpSocket::new(&net_stack);
+            let mut rx_buf = [0u8; 1024];
+            let mut tx_buf = [0u8; 4096];
+            let mut socket =
+                TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
             if socket.accept(SSE_PORT).await.is_err() {
                 continue;
             }

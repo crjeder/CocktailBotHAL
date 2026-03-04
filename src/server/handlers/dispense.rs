@@ -57,7 +57,7 @@ pub async fn handle_create_job<W: Write + Unpin>(
         body.items,
         body.require_glass,
         body.parallel,
-        timeout,
+        timeout.into(),
     ) {
         Ok(job_id) => {
             http::write_json(

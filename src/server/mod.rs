@@ -8,6 +8,27 @@ use crate::hal::*;
 pub mod http;
 pub mod sse;
 
+/// Default Bearer token used when `RobotConfig::token` is empty.
+/// Operators MUST change this via `PATCH /v1/config` before deployment.
+const DEFAULT_TOKEN: &str = "changeme";
+
+/// Compare two token strings in constant time to prevent timing-based
+/// enumeration. Returns `true` only if both strings are identical in length
+/// and content. The XOR accumulator ensures no early-exit on the first
+/// differing byte.
+fn tokens_equal(a: &str, b: &str) -> bool {
+    let a = a.as_bytes();
+    let b = b.as_bytes();
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
 pub struct RobotHal<'a> {
     pub control: &'a mut dyn ControlHal,
     pub status: &'a mut dyn StatusHal,
@@ -26,7 +47,10 @@ impl<'a> ApiServer<'a> {
     /// Main server loop — accepts connections on port 80.
     pub async fn run(&mut self, net_stack: embassy_net::Stack<'_>) {
         loop {
-            let mut socket = TcpSocket::new(&net_stack);
+            let mut rx_buf = [0u8; 4096];
+            let mut tx_buf = [0u8; 4096];
+            let mut socket =
+                TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
             socket.accept(80).await.unwrap();
 
             self.handle_connection(&mut socket).await;
@@ -44,6 +68,29 @@ impl<'a> ApiServer<'a> {
 
         let method = request.method.as_str();
         let path = request.path.as_str();
+
+        // Authenticate before dispatching to any handler.
+        let cfg = self.hal.config.get_active_config();
+        let effective_token = if cfg.token.is_empty() {
+            DEFAULT_TOKEN
+        } else {
+            cfg.token.as_str()
+        };
+        let authorized = request
+            .header("Authorization")
+            .and_then(|v| v.strip_prefix("Bearer "))
+            .map(|tok| tokens_equal(tok, effective_token))
+            .unwrap_or(false);
+        if !authorized {
+            http::write_json(
+                socket,
+                401,
+                &serde_json::json!({"error": "Unauthorized"}),
+            )
+            .await
+            .ok();
+            return;
+        }
 
         match (method, path) {
             // ----- status -----
