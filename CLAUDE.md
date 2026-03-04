@@ -31,8 +31,7 @@ for full tech stack, architecture, and code conventions.
 ```
 CocktailBotHAL/
 ├── src/
-│   ├── main.rs          # Legacy REST API entry point (Rocket 0.4)
-│   ├── api/mod.rs       # Newer alternative API implementation (Rocket 0.4)
+│   ├── main.rs          # Placeholder entry point (sync stub; see TODO for async BSP pattern)
 │   ├── hal/mod.rs       # Core HAL trait definitions and data types
 │   └── server/mod.rs    # Async HTTP server (embassy-net)
 ├── openspec/
@@ -64,11 +63,11 @@ No Makefile or Docker. Standard Cargo only.
 
 - **Do not break the HAL trait interface** (`src/hal/mod.rs`). It is the
   public contract for hardware implementors.
-- **Both `main.rs` and `api/mod.rs` define `fn main()`** — only one can be the
-  binary entry point. `main.rs` is current default. Coordinate when touching entry points.
+- **`main.rs` is the only binary entry point** — `api/mod.rs` no longer exists.
+  For ESP32 bring-up, replace `fn main()` with `#[esp_hal::main]` async entry point
+  (see TODO comment in `src/main.rs`).
 - **Cargo.lock is gitignored** — do not add it.
 - **No `.env` files** — all config is hardcoded or loaded via HAL traits at runtime.
 - **ESP32 code** (`src/esp32/`) must use only `core` and `alloc` — no `std` imports.
-- **Known typo** in `API.yaml` line 82 (`integerlö` → `integer`). Fix before generating stubs.
 - Before adding any dependency, check commented-out entries in `Cargo.toml` first.
 - Run `cargo fmt` before every commit.

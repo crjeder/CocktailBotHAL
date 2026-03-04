@@ -6,21 +6,18 @@ all API routes are wired, and `list_jobs()` has been added to `DispenseHal`.
 
 ---
 
-## Blockers (project will not compile without these)
+## Blockers (project will not compile on target without these)
 
-### Entry point: `no_std` + async executor
+### Entry point: ESP32 async executor
 
-`src/main.rs` currently contains a synchronous `fn main()` placeholder.
-For an embedded target this must be replaced with an MCU-specific async
-entry point, e.g.:
+`src/main.rs` contains a synchronous `fn main()` placeholder.
+For ESP32 deployment, replace with the BSP-provided async entry point
+(see the detailed TODO comment in `src/main.rs`). Use `esp-hal` +
+`esp-hal-embassy` — not `#[embassy_executor::main]`, which is only
+available for cortex-m/riscv32/avr targets, not arch-spin/arch-std.
 
-```rust
-#[embassy_executor::main]
-async fn main(spawner: embassy_executor::Spawner) { ... }
-```
-
-Add `embassy_executor` to `Cargo.toml` and add a `#[panic_handler]` and
-global allocator appropriate for your target.
+Add `esp-hal`, `esp-hal-embassy`, `esp-wifi` to `Cargo.toml` and
+add a `#[panic_handler]` and global allocator for the ESP32 target.
 
 ---
 

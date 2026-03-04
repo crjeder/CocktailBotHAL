@@ -56,3 +56,25 @@
   abstracting the HTTP layer)
 - Enable test-case crate for parameterized tests if needed
 - Implement real hardware drivers replacing the Stub* types
+
+## Session 2026-03-04 — replace-legacy-web-framework
+
+**Change:** Proposed and applied `replace-legacy-web-framework` openspec change.
+
+**What was done:**
+- Confirmed Rocket was already absent from `Cargo.toml`; `src/api/mod.rs` was already gone.
+- Added `embassy-executor = "0.9"` with `arch-spin` feature to `Cargo.toml`.
+- Updated `src/main.rs` entry point with detailed TODO comment block documenting
+  the `#[esp_hal::main]` async entry point pattern for ESP32 bring-up.
+  Kept synchronous placeholder — `#[embassy_executor::main]` macro unavailable
+  for arch-spin/arch-std in embassy-executor 0.9.x; real async entry is BSP-provided.
+- Fixed `API.yaml` typo (`integerlö` → `integer`) — was already corrected in a prior session.
+- Removed all Rocket references from `CLAUDE.md` and `openspec/config.yaml`.
+- Updated Open Work in both docs to reflect current state.
+- `cargo check` passes clean.
+
+**Key discovery:** `#[embassy_executor::main]` is only exported when no `_arch` feature is
+active (it uses `main_unspecified` gated behind `#[cfg(not(feature = "_arch"))]`).
+For ESP32, the async entry point comes from `esp-hal` BSP, not embassy-executor directly.
+
+**Status:** All tasks complete. Change ready to archive.

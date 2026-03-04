@@ -144,35 +144,46 @@ impl CleaningHal for StubCleaningHal {
 // ============================================================================
 // Entry point
 //
-// TODO: Replace with an embassy executor entry point for your target MCU.
-//   #[embassy_executor::main]
-//   async fn main(spawner: embassy_executor::Spawner) { ... }
+// TODO (ESP32 bring-up): Replace this stub with the BSP-provided async entry
+// point.  The typical pattern with esp-hal + esp-hal-embassy is:
+//
+//   #[esp_hal::main]
+//   async fn main(_spawner: embassy_executor::Spawner) {
+//       let peripherals = esp_hal::init(esp_hal::Config::default());
+//       esp_hal_embassy::init(/* timer */);
+//       // initialise embassy-net stack with esp-wifi ...
+//       let net_stack = /* ... */;
+//       ApiServer { hal: RobotHal { /* real drivers */ } }
+//           .run(net_stack)
+//           .await;
+//   }
+//
+// embassy-executor's #[embassy_executor::main] macro is only available for
+// cortex-m / riscv32 / avr arch features; std/spin targets use the raw
+// Executor API.  Actual ESP32 deployment will use esp-hal's entry macro.
 // ============================================================================
 
+#[cfg(not(test))]
 fn main() {
-    // TODO: Initialise the embassy async runtime, network stack, and real
-    // HAL drivers, then pass them to ApiServer::run().
-    #[cfg(not(test))]
-    {
-        let mut control = StubControlHal;
-        let mut status = StubStatusHal;
-        let mut config = StubConfigHal;
-        let mut storage = StubStorageHal;
-        let mut sensors = StubSensorHal;
-        let mut dispense = StubDispenseHal;
-        let mut cleaning = StubCleaningHal;
+    // Placeholder — real MCU entry point is async (see TODO above).
+    let mut control = StubControlHal;
+    let mut status = StubStatusHal;
+    let mut config = StubConfigHal;
+    let mut storage = StubStorageHal;
+    let mut sensors = StubSensorHal;
+    let mut dispense = StubDispenseHal;
+    let mut cleaning = StubCleaningHal;
 
-        let _server = ApiServer {
-            hal: RobotHal {
-                control: &mut control,
-                status: &mut status,
-                config: &mut config,
-                storage: &mut storage,
-                sensors: &mut sensors,
-                dispense: &mut dispense,
-                cleaning: &mut cleaning,
-            },
-        };
-        // TODO: call _server.run(net_stack).await inside an async executor
-    }
+    let _server = ApiServer {
+        hal: RobotHal {
+            control: &mut control,
+            status: &mut status,
+            config: &mut config,
+            storage: &mut storage,
+            sensors: &mut sensors,
+            dispense: &mut dispense,
+            cleaning: &mut cleaning,
+        },
+    };
+    // Real call: _server.run(net_stack).await — inside the BSP async executor.
 }

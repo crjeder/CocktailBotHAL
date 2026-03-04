@@ -10,9 +10,9 @@ context: |
 
   ## Tech Stack
   - Async networking: embassy-net, embedded-io-async, embassy_time
+  - Async executor: embassy-executor 0.9 (arch-spin; ESP32 deployment will use esp-hal-embassy)
   - Serialization: serde 1.0 + derive, serde_json 1.0
   - Domain logic: generic_cocktail (local path dep at ../generic-cocktail — must be present to build)
-  - Legacy web framework: Rocket 0.4, rocket_contrib 0.4.11
   - Formatting: rustfmt (brace_style = AlwaysNextLine, control_brace_style = AlwaysNextLine,
     fn_single_line = true, indent_style = Block, max_width = 80, struct_lit_width = 40)
   - ESP32 modules must use only core and alloc — no std imports permitted
@@ -34,13 +34,13 @@ context: |
   to handler sub-modules: status, control, config, sensors, dispense, cleaning.
   Handler sub-modules are the main area of active development.
 
-  Two legacy Rocket implementations exist (src/main.rs and src/api/mod.rs) — both
-  define fn main(). Only one can be the binary entry point; main.rs is current default.
-  Both are being superseded by the async v1 API in API.yaml.
+  src/main.rs is the sole binary entry point. It is a synchronous placeholder stub;
+  for ESP32 bring-up, replace fn main() with #[esp_hal::main] async entry point
+  using esp-hal + esp-hal-embassy. The async HTTP server (ApiServer::run) is already
+  implemented in src/server/ and is called from the async entry point.
 
   ## API
   OpenAPI 3.1.0 spec in API.yaml. Base URL: http://robot.local/v1. Auth: Bearer token.
-  Known issue: typo on line 82 of API.yaml (integerlö → integer); fix before generating stubs.
 
   ## Code Conventions
   - Doc comments (///) on all public items (traits, structs, methods)
@@ -53,13 +53,12 @@ context: |
   - Run cargo fmt before every commit
 
   ## Constraints
-  - Do NOT break the HAL trait interface in src/hal/mod.rs — it is the public contract
-    for hardware implementors
+  - Do NOT break the HAL trait interface in src/hal/mod.rs until necessary — it is the public contract
+    for hardware implementors. If you have to change it, update the version according to semver and document the change in the changelog.
   - generic_cocktail local path dep must be present at ../generic-cocktail to build
   - ESP32 feature-gated code must compile under no_std + alloc only
 
   ## Open Work
-  - Implement handler sub-modules in src/server/ (status, control, config, sensors, dispense, cleaning)
-  - Reconcile src/main.rs vs src/api/mod.rs; long-term target is the async v1 API
   - Add automated tests (re-enable test-case dep, add #[cfg(test)] modules)
   - Implement StorageHal (persistent config read/write defined but not implemented)
+  - ESP32 bring-up: replace fn main() stub with #[esp_hal::main] + real NIC/HAL drivers
