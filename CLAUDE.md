@@ -27,19 +27,32 @@ OpenAPI 3.1.0 HTTP API to clients.
 ```
 CocktailBotHAL/
 ├── src/
-│   ├── main.rs          # Legacy REST API entry point (Rocket 0.4)
-│   ├── api/mod.rs       # Newer alternative API implementation (Rocket 0.4)
-│   ├── hal/mod.rs       # Core HAL trait definitions and data types
-│   └── server/mod.rs    # Async HTTP server (embassy-net)
+│   ├── main.rs              # Entry point + HAL stub implementations
+│   ├── hal/
+│   │   ├── mod.rs           # Core HAL trait definitions and data types
+│   │   └── tests.rs         # Unit tests with mock HAL implementations
+│   └── server/
+│       ├── mod.rs           # Async HTTP server + route dispatch (embassy-net)
+│       ├── http.rs          # Minimal HTTP/1.1 parser and JSON response writer
+│       ├── sse.rs           # Server-Sent Events server (port 9000)
+│       └── handlers/
+│           ├── status.rs    # GET /v1/status
+│           ├── control.rs   # POST /v1/control/*
+│           ├── config.rs    # GET/PATCH /v1/config, GET/POST /v1/storage/config
+│           ├── sensors.rs   # GET /v1/sensors/*
+│           ├── dispense.rs  # POST/GET /v1/dispense/jobs[/{job_id}]
+│           └── cleaning.rs  # POST /v1/cleaning/*
 ├── testdata/
-│   ├── margarita.json   # Sample Margarita recipe
-│   ├── vesper.json      # Sample Vesper recipe
-│   └── vesper2.json     # Vesper recipe (alternate format)
-├── API.yaml             # OpenAPI 3.1.0 specification
-├── Cargo.toml           # Rust project manifest
-├── rustfmt.toml         # Formatting rules
-├── README.md            # Project overview and feature list
-└── LICENSE              # GPL v3
+│   ├── margarita.json       # Sample Margarita recipe
+│   ├── vesper.json          # Sample Vesper recipe
+│   └── vesper2.json         # Vesper recipe (alternate format)
+├── API.yaml                 # OpenAPI 3.1.0 specification
+├── Cargo.toml               # Rust project manifest
+├── rustfmt.toml             # Formatting rules
+├── claude-progress.txt      # AI session progress tracking
+├── TODO.md                  # Open implementation work
+├── README.md                # Project overview and feature list
+└── LICENSE                  # GPL v3
 ```
 
 ---
@@ -48,30 +61,33 @@ CocktailBotHAL/
 
 | Category         | Library / Tool                                      |
 |------------------|-----------------------------------------------------|
-| Web framework    | Rocket 0.4, rocket_contrib 0.4.11                   |
-| Async networking | embassy-net, embedded-io-async                      |
+| Async networking | embassy-net, embedded-io-async (not yet in Cargo.toml) |
 | Serialization    | serde 1.0 + derive, serde_json 1.0, serde_derive    |
-| Domain logic     | generic_cocktail (local path dep: `../generic-cocktail`) |
-| Timing           | embassy_time                                        |
+| Timing           | `core::time::Duration` (standard library)           |
 | Formatting       | rustfmt (config in `rustfmt.toml`)                  |
 
-Local path dependency `generic_cocktail` lives at `../generic-cocktail` relative
-to this repository. Both must be present for a successful build.
+> **Note:** Legacy Rocket 0.4 code and the `generic_cocktail` local path
+> dependency have been removed. The embassy crates are used in source but not
+> yet added to `Cargo.toml` — see `TODO.md` for blockers.
 
 ---
 
 ## Build & Run
 
 ```bash
-# Debug build
+# Debug build (will fail until embassy crates are added — see TODO.md)
 cargo build
 
-# Release build
-cargo build --release
+# Run the test suite (57 tests, works without embassy dependencies)
+cargo test
 
-# Run the server (starts on port 8000)
-cargo run
+# Format code before committing
+cargo fmt
 ```
+
+> **Important:** `cargo build` and `cargo run` currently fail because the
+> embassy crates are not yet in `Cargo.toml`. However, `cargo test` works
+> because the `server` module is gated with `#[cfg(not(test))]`.
 
 There is no Makefile, Docker setup, or additional build scripts. Standard Cargo
 commands are sufficient.
@@ -106,22 +122,27 @@ Key types in this module:
 accepts TCP connections and dispatches requests to handler sub-modules:
 `status`, `control`, `config`, `sensors`, `dispense`, `cleaning`.
 
-Handler sub-modules are declared but not yet fully implemented — this is the
-main area of active development.
+All handler sub-modules are implemented and call the corresponding HAL trait
+methods. All `API.yaml` routes (except auth) are wired, including dynamic
+path extraction for `/v1/dispense/jobs/{job_id}`.
 
-### Legacy API (`src/main.rs` and `src/api/mod.rs`)
+The server module is gated with `#[cfg(not(test))]` so tests compile without
+the embassy-net and embedded-io-async dependencies.
 
-Two overlapping Rocket 0.4 implementations exist. `main.rs` is the original
-with hardcoded dispenser state. `api/mod.rs` is a cleaner refactor. Both
-expose similar routes:
+### SSE Server (`src/server/sse.rs`)
 
-```
-GET  /REST/get/liquids
-GET  /REST/get/glasses
-POST /REST/post/cocktail
-```
+A Server-Sent Events server running on port 9000. Polls HAL traits every
+500ms for state and job changes, emitting typed SSE events (`state_change`,
+`job_update`) to connected clients. Includes 30-second keepalive comments.
 
-These are being superseded by the `v1` async API defined in `API.yaml`.
+### Entry Point (`src/main.rs`)
+
+Contains `fn main()` placeholder and `Stub*Hal` implementations for all 7
+HAL traits (all methods return `todo!()`). The stub implementations serve as
+a template for real hardware drivers.
+
+> **Note:** Legacy Rocket 0.4 code (`src/api/mod.rs`) has been removed.
+> The project now targets only the async `v1` API.
 
 ---
 
@@ -156,15 +177,28 @@ Authentication: Bearer token.
 
 ---
 
-## Test Data
+## Testing
 
-Sample cocktail recipes in `testdata/` are JSON files used for manual API
-testing. No automated test suite is currently configured. There are no
-`#[cfg(test)]` modules and the `test-case` dependency is commented out in
-`Cargo.toml`.
+### Automated Tests (`src/hal/tests.rs`)
 
-To run manual tests, start the server and POST/GET against the endpoints using
-the JSON files as request bodies where applicable.
+Run with `cargo test`. The test suite contains **57 unit tests** covering:
+
+- **Mock HAL implementations** for all 7 traits (`MockControlHal`,
+  `MockStatusHal`, `MockConfigHal`, `MockStorageHal`, `MockSensorHal`,
+  `MockDispenseHal`, `MockCleaningHal`)
+- **Trait behavior tests:** power on/off, state transitions, config CRUD,
+  storage with overwrite semantics, sensor readings, job lifecycle
+  (create/list/status/cancel), cleaning start/stop
+- **Error injection:** each mock supports a `fail_next` field to test error
+  propagation through HAL trait methods
+- **Serialization roundtrip tests:** JSON serialization/deserialization for
+  all HAL data types (`RobotState`, `RobotConfig`, `JobState`, `ErrorInfo`,
+  `GlassSensorState`, `LevelState`, `JobItem`, `LiquidCalibration`,
+  `Capabilities`, `LevelReporting`)
+
+### Test Data
+
+Sample cocktail recipes in `testdata/` are JSON files for manual API testing.
 
 ---
 
@@ -188,7 +222,7 @@ Always run `cargo fmt` before committing.
 - Use `///` doc comments on all public items (traits, structs, methods).
 - Prefer trait objects (`Box<dyn Trait>`) for composing HAL implementations —
   see `RobotHal` in `src/server/mod.rs`.
-- Error types use custom enums (e.g., `BarBotError` in `main.rs`).
+- Error types use the `ErrorInfo` struct (code, message, hint, recoverable).
 - JSON serialization via `#[derive(Serialize, Deserialize)]` from serde.
 - Avoid adding dependencies without first checking what is already commented out
   in `Cargo.toml` — several libraries were intentionally deferred.
@@ -210,15 +244,18 @@ Examples from the log: `"Add HAL module with robot control traits and structs"`,
 
 ### Key Areas for Contribution
 
-1. **Implement handler sub-modules** in `src/server/` (`status.rs`,
-   `control.rs`, `config.rs`, `sensors.rs`, `dispense.rs`, `cleaning.rs`).
-2. **Reconcile the two API implementations** — `src/main.rs` vs `src/api/mod.rs`.
-   The long-term target is the async `v1` API.
-3. **Add automated tests** — re-enable the `test-case` dependency and add
-   `#[cfg(test)]` modules, especially for HAL trait behavior.
+1. **Add embassy dependencies to `Cargo.toml`** — the server module uses
+   `embassy-net`, `embedded-io-async`, and `embassy_time` but these are not
+   yet in `Cargo.toml`. Pick versions matching your target MCU.
+2. **Replace `Stub*Hal` with real hardware drivers** — the stubs in `main.rs`
+   all use `todo!()`. Implement for your target platform.
+3. **Add handler-level integration tests** — test HTTP request/response
+   cycles against mock HAL implementations.
 4. **Implement `StorageHal`** — persistent config read/write is defined but
-   not yet implemented.
-5. **Fix the typo** in `API.yaml` line 82 (`integerlö` → `integer`).
+   not yet implemented for any real backend.
+5. **Add Bearer token authentication** — `API.yaml` declares it but the
+   server does not validate tokens.
+6. **Fix the typo** in `API.yaml` line 82 (`integerlö` → `integer`).
 
 ---
 
@@ -226,14 +263,16 @@ Examples from the log: `"Add HAL module with robot control traits and structs"`,
 
 - **Do not break the HAL trait interface** (`src/hal/mod.rs`). It is the
   public contract for hardware implementors.
-- **Both `main.rs` and `api/mod.rs` define `fn main()`** — only one can be the
-  binary entry point. The project currently compiles with `main.rs` as the
-  default. When implementing the new async server, coordinate which entry point
-  to use.
-- **The `generic_cocktail` crate is a local path dependency** at
-  `../generic-cocktail`. If that directory is missing, the build will fail.
+- **The HAL module uses `core::time::Duration`** (not `embassy_time::Duration`)
+  for portability. This allows tests to run without embassy dependencies.
+- **`mod server` is gated with `#[cfg(not(test))]`** — this is intentional
+  so `cargo test` works without embassy-net and embedded-io-async. Do not
+  remove this gate unless you add those dependencies to `Cargo.toml`.
+- **`extern crate alloc;`** is declared in `main.rs` to make `alloc::string`
+  and `alloc::vec` available throughout the crate (needed for eventual
+  `no_std` support).
 - **Cargo.lock is gitignored** — do not add it.
 - **No environment variables or `.env` files** are used; all configuration is
   currently hardcoded or loaded via the HAL traits at runtime.
-- **Port 8000** is the default for the Rocket server. The async server port
-  is determined by the embassy-net configuration (not yet finalized).
+- **The async server** listens on port 80 (API) and port 9000 (SSE). These
+  ports are configured in `src/server/mod.rs` and `src/server/sse.rs`.

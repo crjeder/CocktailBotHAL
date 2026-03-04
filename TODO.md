@@ -16,7 +16,7 @@ Add correct versions for your target MCU platform:
 - `embassy-net` (used in `src/server/mod.rs`)
 - `embedded-io-async` (used in `src/server/mod.rs`, `src/server/http.rs`,
   and all handler modules)
-- `embassy_time` (used in `src/hal/mod.rs` and `src/server/handlers/dispense.rs`)
+- `embassy_time` (used in `src/server/sse.rs` and `src/server/handlers/dispense.rs`)
 
 Embassy crates are released together — pick a consistent snapshot compatible
 with your target (STM32, ESP32, RP2040, etc.).
@@ -56,19 +56,31 @@ The following items have been implemented and are no longer open:
   `Deserialize` where needed) for JSON serialization.
 - **`generic_cocktail` dependency** — removed from `Cargo.toml` (no longer
   used after legacy Rocket code removal).
+- **Legacy Rocket 0.4 code** — `src/api/mod.rs` removed; `main.rs` no longer
+  uses Rocket.
+- **HAL unit tests** — 57 tests in `src/hal/tests.rs` with mock
+  implementations for all 7 traits, including error injection and
+  serialization roundtrip tests.
+- **`core::time::Duration`** — replaced `embassy_time::Duration` in
+  `src/hal/mod.rs` for portability (allows tests without embassy).
+- **Test compilation** — `mod server` gated with `#[cfg(not(test))]` and
+  `extern crate alloc` added to `main.rs`.
+- **SSE server** — `src/server/sse.rs` implemented with polling-based
+  change detection for robot state and job updates.
 
 ---
 
-## Server-Sent Events (SSE)
+## Server-Sent Events (SSE) — Partially Done
 
-`GET /v1/events` is specified in `API.yaml`. No trait method or handler
-exists for it. Design the event model before implementing:
+`src/server/sse.rs` implements an SSE server on port 9000 that polls HAL
+traits every 500ms for state and job changes. It emits `state_change` and
+`job_update` events with 30-second keepalive comments.
 
-- What events are emitted? (state changes, job completion, errors, etc.)
-- How does the HAL signal events? (callback registration, polling, async
-  channel)
-- SSE over raw embassy TCP sockets requires `text/event-stream` content type
-  and chunked transfer encoding.
+Remaining work:
+
+- Wire SSE into the main API server (currently a separate `SseServer` struct)
+- Add error events (currently only tracks state and job changes)
+- Consider an async channel approach instead of polling for lower latency
 
 ---
 
@@ -83,10 +95,10 @@ handlers.
 
 ## `StorageHal` Implementation
 
-No concrete implementation of `StorageHal` exists anywhere. Provide at
-minimum a RAM-backed stub that satisfies the trait for testing purposes,
-then replace with a real implementation (EEPROM, flash sector, SD card,
-etc.) for production.
+No concrete (non-stub) implementation of `StorageHal` exists. The test suite
+includes `MockStorageHal` (RAM-backed with overwrite semantics) which can
+serve as a reference. A production implementation should target EEPROM, flash
+sector, SD card, etc.
 
 ---
 
@@ -104,13 +116,19 @@ schemas:
 
 ---
 
-## Testing
+## Testing — Partially Done
 
-No automated tests exist. To add them:
+**Completed:** `src/hal/tests.rs` contains 57 unit tests with mock
+implementations for all 7 HAL traits. Run with `cargo test`. The `server`
+module is gated with `#[cfg(not(test))]` so tests compile without embassy
+dependencies. The HAL module uses `core::time::Duration` instead of
+`embassy_time::Duration` for test portability.
 
-1. Uncomment `test-case = "3.2"` in `[dev-dependencies]` in `Cargo.toml`.
-2. Uncomment `embedded-hal-mock = "0.7.2"` to create mock HAL
-   implementations for unit testing.
-3. Add `#[cfg(test)]` modules to each handler file testing against mock HAL
-   implementations.
-4. Add integration tests that send HTTP requests to a test server.
+Remaining work:
+
+1. **Handler integration tests** — test HTTP request/response cycles against
+   mock HAL implementations. Requires either abstracting the socket layer or
+   adding `embedded-io-async` mock support.
+2. **Parameterized tests** — uncomment `test-case = "3.2"` in
+   `[dev-dependencies]` if needed for data-driven test cases.
+3. **SSE server tests** — verify event emission and keepalive behavior.
