@@ -6,6 +6,7 @@ use embedded_io_async::{Read, Write};
 use crate::hal::*;
 
 pub mod http;
+pub mod sse;
 
 pub struct RobotHal<'a>
 {

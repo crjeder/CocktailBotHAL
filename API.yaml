@@ -354,6 +354,31 @@ paths:
   /events:
     get:
       summary: Server-Sent Events stream
+      description: |
+        Long-lived SSE connection served on a **separate port (9000)**.
+        On connect the server sends an initial snapshot of the current
+        robot state and all active/queued jobs, then emits change
+        events as they occur (polled every 500ms).
+
+        A `: keepalive` comment is sent every 30 seconds when idle.
+
+        **Event types:**
+
+        `state_change` — emitted when `RobotState` transitions.
+        ```json
+        {"state": "working"}
+        ```
+
+        `job_update` — emitted when a dispensing job is created,
+        progresses, completes, or is cancelled.
+        ```json
+        {"job_id": "abc", "client_job_id": "xyz",
+         "state": "running", "progress_pct": 45}
+        ```
       responses:
         '200':
           description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
