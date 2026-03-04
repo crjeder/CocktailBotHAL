@@ -13,8 +13,7 @@ use crate::server::RobotHal;
 pub async fn handle_status<W: Write + Unpin>(
     hal: &RobotHal<'_>,
     socket: &mut W,
-)
-{
+) {
     let state = hal.status.state();
     let errors = hal.status.active_errors();
 

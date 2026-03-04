@@ -5,8 +5,8 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use embedded_io_async::Write;
 use embassy_time::Duration;
+use embedded_io_async::Write;
 use serde::Deserialize;
 
 use crate::hal::JobItem;
@@ -22,11 +22,9 @@ pub async fn handle_create_job<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     request: &HttpRequest,
     socket: &mut W,
-)
-{
+) {
     #[derive(Deserialize)]
-    struct Body
-    {
+    struct Body {
         client_job_id: String,
         items: Vec<JobItem>,
         #[serde(default)]
@@ -37,11 +35,9 @@ pub async fn handle_create_job<W: Write + Unpin>(
         timeout_ms: Option<u64>,
     }
 
-    let body: Body = match http::parse_body(request)
-    {
+    let body: Body = match http::parse_body(request) {
         Ok(b) => b,
-        Err(_) =>
-        {
+        Err(_) => {
             http::write_json(
                 socket,
                 400,
@@ -53,9 +49,8 @@ pub async fn handle_create_job<W: Write + Unpin>(
         }
     };
 
-    let timeout = Duration::from_millis(
-        body.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
-    );
+    let timeout =
+        Duration::from_millis(body.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
 
     match hal.dispense.create_job(
         body.client_job_id,
@@ -63,10 +58,8 @@ pub async fn handle_create_job<W: Write + Unpin>(
         body.require_glass,
         body.parallel,
         timeout,
-    )
-    {
-        Ok(job_id) =>
-        {
+    ) {
+        Ok(job_id) => {
             http::write_json(
                 socket,
                 202,
@@ -75,8 +68,7 @@ pub async fn handle_create_job<W: Write + Unpin>(
             .await
             .ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -86,16 +78,9 @@ pub async fn handle_create_job<W: Write + Unpin>(
 pub async fn handle_list_jobs<W: Write + Unpin>(
     hal: &RobotHal<'_>,
     socket: &mut W,
-)
-{
+) {
     let jobs = hal.dispense.list_jobs();
-    http::write_json(
-        socket,
-        200,
-        &serde_json::json!(jobs),
-    )
-    .await
-    .ok();
+    http::write_json(socket, 200, &serde_json::json!(jobs)).await.ok();
 }
 
 /// GET /v1/dispense/jobs/{job_id} — job status with progress.
@@ -103,22 +88,14 @@ pub async fn handle_job_status<W: Write + Unpin>(
     hal: &RobotHal<'_>,
     job_id: &str,
     socket: &mut W,
-)
-{
-    match hal.dispense.job_status(job_id)
-    {
-        Ok(status) =>
-        {
-            http::write_json(
-                socket,
-                200,
-                &serde_json::json!(status),
-            )
-            .await
-            .ok();
+) {
+    match hal.dispense.job_status(job_id) {
+        Ok(status) => {
+            http::write_json(socket, 200, &serde_json::json!(status))
+                .await
+                .ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -129,16 +106,12 @@ pub async fn handle_cancel_job<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     job_id: &str,
     socket: &mut W,
-)
-{
-    match hal.dispense.cancel_job(job_id)
-    {
-        Ok(()) =>
-        {
+) {
+    match hal.dispense.cancel_job(job_id) {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }

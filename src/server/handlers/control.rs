@@ -14,19 +14,15 @@ pub async fn handle_power<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     request: &HttpRequest,
     socket: &mut W,
-)
-{
+) {
     #[derive(Deserialize)]
-    struct Body
-    {
+    struct Body {
         on: bool,
     }
 
-    let body: Body = match http::parse_body(request)
-    {
+    let body: Body = match http::parse_body(request) {
         Ok(b) => b,
-        Err(_) =>
-        {
+        Err(_) => {
             http::write_json(
                 socket,
                 400,
@@ -38,14 +34,11 @@ pub async fn handle_power<W: Write + Unpin>(
         }
     };
 
-    match hal.control.power(body.on)
-    {
-        Ok(()) =>
-        {
+    match hal.control.power(body.on) {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -57,19 +50,15 @@ pub async fn handle_power_save<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     request: &HttpRequest,
     socket: &mut W,
-)
-{
+) {
     #[derive(Deserialize)]
-    struct Body
-    {
+    struct Body {
         enabled: bool,
     }
 
-    let body: Body = match http::parse_body(request)
-    {
+    let body: Body = match http::parse_body(request) {
         Ok(b) => b,
-        Err(_) =>
-        {
+        Err(_) => {
             http::write_json(
                 socket,
                 400,
@@ -81,14 +70,11 @@ pub async fn handle_power_save<W: Write + Unpin>(
         }
     };
 
-    match hal.control.power_save(body.enabled)
-    {
-        Ok(()) =>
-        {
+    match hal.control.power_save(body.enabled) {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -98,16 +84,12 @@ pub async fn handle_power_save<W: Write + Unpin>(
 pub async fn handle_reset<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     socket: &mut W,
-)
-{
-    match hal.control.reset_errors()
-    {
-        Ok(()) =>
-        {
+) {
+    match hal.control.reset_errors() {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }
@@ -118,16 +100,12 @@ pub async fn handle_reset<W: Write + Unpin>(
 pub async fn handle_reload_config<W: Write + Unpin>(
     hal: &mut RobotHal<'_>,
     socket: &mut W,
-)
-{
-    match hal.control.reload_config()
-    {
-        Ok(()) =>
-        {
+) {
+    match hal.control.reload_config() {
+        Ok(()) => {
             http::write_accepted(socket).await.ok();
         }
-        Err(e) =>
-        {
+        Err(e) => {
             http::write_hal_error(socket, &e).await.ok();
         }
     }

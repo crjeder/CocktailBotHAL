@@ -1,0 +1,30 @@
+## Claude Session Progress
+
+### 2026-03-04: Implement HAL tests with mock implementations
+
+**Branch:** claude/implement-hal-tests-Mby4s
+
+**Changes made:**
+- `src/hal/mod.rs`: Replaced `embassy_time::Duration` with `core::time::Duration`
+  (more portable, embassy_time was not in Cargo.toml anyway). Added `#[cfg(test)]
+  mod tests;` declaration.
+- `src/main.rs`: Added `extern crate alloc;` for alloc availability in std builds.
+  Gated `mod server;` and server-related imports/code with `#[cfg(not(test))]`
+  so tests compile without embassy_net/embedded_io_async dependencies.
+  Replaced `embassy_time::Duration` with `core::time::Duration`.
+- `src/hal/tests.rs` (NEW): Comprehensive test suite with 57 tests covering:
+  - Mock implementations for all 7 HAL traits (ControlHal, StatusHal, ConfigHal,
+    StorageHal, SensorHal, DispenseHal, CleaningHal)
+  - Each mock has configurable behavior and error injection via `fail_next`
+  - Trait behavior tests: power on/off, state transitions, config CRUD,
+    storage with overwrite semantics, sensor readings, job lifecycle, cleaning
+  - Serialization tests: JSON roundtrips for all data types, snake_case enums,
+    tagged LevelState variants, JobState custom serializer
+
+**Status:** All 57 tests pass. No test failures.
+
+**Next steps:**
+- Server handler integration tests (would require embassy-net mock or
+  abstracting the HTTP layer)
+- Enable test-case crate for parameterized tests if needed
+- Implement real hardware drivers replacing the Stub* types
