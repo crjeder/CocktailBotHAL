@@ -13,6 +13,14 @@ OpenAPI 3.1.0 HTTP API to clients.
 - **Crate name:** `cocktail_bot_hal` v0.1.0
 
 ---
+## Session Start
+1. read `claude-progress.txt`
+2. read `git log --oneline -10`
+3. work on exactly ONE task
+
+## Session End  
+1. git commit with descriptive message
+2. updadate `claude-progress.txt`
 
 ## Repository Structure
 
