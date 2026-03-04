@@ -11,6 +11,7 @@ OpenAPI 3.1.0 HTTP API to clients. To clarify: It abstracts the robot's construc
 - **License:** GNU GPL v3
 - **Author:** crjeder <crjeder@gmail.com>
 - **Crate name:** `cocktail_bot_hal` v0.1.0
+- [Follow semantic versioning ](https://semver.org/)
 
 ---
 ## Session Start
@@ -21,6 +22,8 @@ OpenAPI 3.1.0 HTTP API to clients. To clarify: It abstracts the robot's construc
 ## Session End  
 1. git commit with descriptive message
 2. updadate `claude-progress.txt`
+3. document relevant changes in CLAUDE.md
+4. update TODO.md to reflect the changes
 
 ## Repository Structure
 
