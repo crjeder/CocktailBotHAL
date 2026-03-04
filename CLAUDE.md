@@ -1,5 +1,3 @@
-# CLAUDE.md — AI Assistant Guide for CocktailBotHAL
-
 ## Project Overview
 
 **CocktailBotHAL** is a Rust-based Hardware Abstraction Layer (HAL) for remotely
@@ -239,4 +237,4 @@ Examples from the log: `"Add HAL module with robot control traits and structs"`,
 - **No environment variables or `.env` files** are used; all configuration is
   currently hardcoded or loaded via the HAL traits at runtime.
 - **Port 8000** is the default for the Rocket server. The async server port
-  is determined by the embassy-net configuration (not yet finalized).
+  is determined by the embassy-net configuration (not yet finalized)."""
