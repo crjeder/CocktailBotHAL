@@ -1,0 +1,16 @@
+- regex = "1.5"
+- rgb = "0.8"
+- taplo = "0.5.1" -  for config files
+- zbar-rust = "0.0.16" -  QRcode
+- reqwest = {version = "0.11", features = ["json", "blocking"]} -  dependeny for roy
+- tokio = {version = "1", features = ["full"]} -  dependeny for reqwest
+- tokio-test = "0.4"
+- embedded-hal-mock = "0.7.2" -  fake hal
+- log = "0.4.14" -  for logging
+- stderrlog = "0.5.1" -  to implement logging
+- quick-error = "2.0" -  for custom errors
+-  axum? looks easy to use. -> web server
+-  test it using HTTP mocking via wiremock:
+-  https://www.lpalmieri.com/posts/how-to-write-a-rest-client-in-rust-with-reqwest-and-wiremock/- http-mocking-with-wiremock
+-  UI?
+-  slint = "1.0.0"
