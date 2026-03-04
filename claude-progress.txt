@@ -1,5 +1,33 @@
 ## Claude Session Progress
 
+### 2026-03-04: Bearer token authentication + dependency fixes
+
+**Commits:** 9f611b4, f8344b0, 812c038
+
+**Changes made:**
+- `src/hal/mod.rs`: Added `token: String` field to `RobotConfig` with `#[serde(default)]`
+- `src/server/http.rs`: Extended `HttpRequest` with `headers` field + `header()` helper;
+  added full header parsing; added 401 to `status_reason`
+- `src/server/mod.rs`: Added `DEFAULT_TOKEN` constant, constant-time `tokens_equal()`,
+  and auth check in `handle_connection` before dispatch; fixed `TcpSocket::new` API
+- `src/server/sse.rs`: Fixed `TcpSocket::new` API; removed unused import
+- `src/server/handlers/dispense.rs`: Fixed `Duration` type mismatch with `.into()`
+- `src/esp32/config.rs`: Added `token: String::new()` to default config
+- `src/main.rs`: Added `#![allow(dead_code)]` — HAL API is public, not internally used
+- `Cargo.toml`: Added embassy-net 0.8.0 (with features), embassy-time 0.5.0,
+  embedded-io-async 0.7.0; removed stale TODO comments
+- `openspec/config.yaml`: Created with full project context for AI spec generation
+- `CLAUDE.md`: Trimmed to session workflow; delegated arch/tech context to openspec/config.yaml
+- Archived `bearer-token-auth` change; synced specs to `openspec/specs/`
+
+**Status:** `cargo check` passes with zero warnings.
+
+**Next steps:**
+- Entry point: replace placeholder main() with `#[embassy_executor::main]` for target MCU
+- StorageHal: implement RAM-backed stub (currently returns NOT_IMPLEMENTED)
+- SSE: design event model before implementing GET /v1/events handler
+- API.yaml schema gaps: Config.part_ml, Config.max_channels_per_job, JobCreateRequest fields
+
 ### 2026-03-04: Implement HAL tests with mock implementations
 
 **Branch:** claude/implement-hal-tests-Mby4s

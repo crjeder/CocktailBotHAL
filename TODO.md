@@ -8,19 +8,6 @@ all API routes are wired, and `list_jobs()` has been added to `DispenseHal`.
 
 ## Blockers (project will not compile without these)
 
-### Missing Cargo.toml dependencies
-
-The following crates are used in source files but not listed in `Cargo.toml`.
-Add correct versions for your target MCU platform:
-
-- `embassy-net` (used in `src/server/mod.rs`)
-- `embedded-io-async` (used in `src/server/mod.rs`, `src/server/http.rs`,
-  and all handler modules)
-- `embassy_time` (used in `src/hal/mod.rs` and `src/server/handlers/dispense.rs`)
-
-Embassy crates are released together — pick a consistent snapshot compatible
-with your target (STM32, ESP32, RP2040, etc.).
-
 ### Entry point: `no_std` + async executor
 
 `src/main.rs` currently contains a synchronous `fn main()` placeholder.
@@ -56,6 +43,11 @@ The following items have been implemented and are no longer open:
   `Deserialize` where needed) for JSON serialization.
 - **`generic_cocktail` dependency** — removed from `Cargo.toml` (no longer
   used after legacy Rocket code removal).
+- **Bearer token authentication** — `Authorization: Bearer <token>` validated
+  in `handle_connection` before dispatch; constant-time comparison; token
+  configurable via `RobotConfig::token`; falls back to compile-time default.
+- **Embassy dependencies** — `embassy-net 0.8.0`, `embassy-time 0.5.0`,
+  `embedded-io-async 0.7.0` added to `Cargo.toml`; `cargo check` passes clean.
 
 ---
 
@@ -69,15 +61,6 @@ exists for it. Design the event model before implementing:
   channel)
 - SSE over raw embassy TCP sockets requires `text/event-stream` content type
   and chunked transfer encoding.
-
----
-
-## Authentication
-
-`API.yaml` declares Bearer token auth as a global security requirement.
-The server does not currently parse `Authorization` headers or validate
-tokens. Add token validation to `src/server/mod.rs` before dispatching to
-handlers.
 
 ---
 
