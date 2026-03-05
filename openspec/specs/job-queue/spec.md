@@ -1,5 +1,25 @@
 ## ADDED Requirements
 
+### Requirement: job-create signature
+`DispenseHal::create_job` SHALL accept exactly four parameters:
+1. `name: &str` — human-readable, non-unique label supplied by the client
+2. `recipe: &Recipe` — the cocktail recipe to dispense (from `generic_cocktail`)
+3. `size_ml: u16` — total target volume in millilitres, computed from glass type at call site
+4. `channel_map: &[u8]` — mapping from recipe ingredient index to hardware channel index
+
+The signature SHALL NOT include `require_glass` or `timeout` parameters. Glass
+detection is a pre-condition enforced by the server layer before calling into the HAL.
+Timeouts are managed by the executor / watchdog layer, not the HAL method signature.
+
+#### Scenario: create_job accepts four arguments
+- **WHEN** the server layer calls `create_job(name, recipe, size_ml, channel_map)`
+- **THEN** the HAL accepts the call without additional parameters
+
+#### Scenario: require_glass is not a HAL parameter
+- **GIVEN** the server layer has already verified glass presence via `SensorHal`
+- **WHEN** `create_job` is invoked
+- **THEN** no `require_glass` flag is passed; glass enforcement is the caller's responsibility
+
 ### Requirement: JobCreated return type
 `DispenseHal::create_job` SHALL return `Result<JobCreated, ErrorInfo>` where
 `JobCreated` is a struct with fields `job_id: String` and `queue_position: u8`.

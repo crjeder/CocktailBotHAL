@@ -5,7 +5,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::hal::{Capabilities, ConfigHal, ErrorInfo, LevelReporting, RobotConfig};
+use crate::hal::{Capabilities, ConfigHal, ErrorInfo, GlassType, LevelReporting, RobotConfig};
 
 /// Stub implementation of [`ConfigHal`] for ESP32.
 pub struct Esp32Config;
@@ -20,9 +20,21 @@ fn default_config() -> RobotConfig {
     RobotConfig {
         version: String::from("0.0.0-stub"),
         liquids: Vec::new(),
-        part_ml: 30.0,
+        glass_types: alloc::vec![
+            GlassType {
+                id: String::from("short"),
+                volume_ml: 100.0
+            },
+            GlassType {
+                id: String::from("medium"),
+                volume_ml: 150.0
+            },
+            GlassType {
+                id: String::from("long"),
+                volume_ml: 200.0
+            },
+        ],
         max_total_parts: 10,
-        max_channels_per_job: 1,
         capabilities: Capabilities {
             level_reporting: LevelReporting::Binary,
             glass_typing: false,

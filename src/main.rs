@@ -21,14 +21,13 @@ mod server;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use core::time::Duration;
 
 #[cfg(not(test))]
 use embassy_executor::{Executor, Spawner};
 use hal::{
     Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState,
-    JobCreated, JobItem, JobStatus, LevelReporting, LevelState, LiquidCalibration, LiquidConfig,
-    RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    GlassType, JobCreated, JobItem, JobStatus, LevelReporting, LevelState, LiquidCalibration,
+    LiquidConfig, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
@@ -75,20 +74,28 @@ struct StubConfigHal;
 impl ConfigHal for StubConfigHal {
     async fn get_active_config(&self) -> RobotConfig {
         RobotConfig {
-            version: String::from("0.3.0"),
+            version: String::from("0.4.0"),
             liquids: vec![LiquidConfig {
                 id: String::from("water"),
                 name: String::from("Water"),
                 position: 0,
-                calibration: LiquidCalibration {
-                    ml_per_sec: 10.0,
-                    prime_ms: 200,
-                    viscosity_factor: 1.0,
-                },
+                calibration: LiquidCalibration { factor: 1.0 },
             }],
-            part_ml: 30.0,
+            glass_types: vec![
+                GlassType {
+                    id: String::from("short"),
+                    volume_ml: 100.0,
+                },
+                GlassType {
+                    id: String::from("medium"),
+                    volume_ml: 150.0,
+                },
+                GlassType {
+                    id: String::from("long"),
+                    volume_ml: 200.0,
+                },
+            ],
             max_total_parts: 10,
-            max_channels_per_job: 2,
             capabilities: Capabilities {
                 level_reporting: LevelReporting::Binary,
                 glass_typing: false,
@@ -137,9 +144,7 @@ impl DispenseHal for StubDispenseHal {
         job_id: String,
         _name: String,
         _items: Vec<JobItem>,
-        _require_glass: bool,
         _parallel: bool,
-        _timeout: Duration,
     ) -> Result<JobCreated, ErrorInfo> {
         Ok(JobCreated {
             job_id,

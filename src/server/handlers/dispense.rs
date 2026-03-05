@@ -5,15 +5,12 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use embassy_time::{Duration, Instant};
+use embassy_time::Instant;
 use embedded_io_async::Write;
 use serde::Deserialize;
 
 use crate::hal::{DispenseHal, JobItem};
 use crate::server::http::{self, HttpRequest};
-
-/// Default job timeout (30 seconds) when not specified in the request.
-const DEFAULT_TIMEOUT_MS: u64 = 30_000;
 
 /// Maximum length of the sanitized name prefix in the generated `job_id`.
 const MAX_NAME_PREFIX_LEN: usize = 32;
@@ -92,13 +89,11 @@ pub async fn handle_create_job<Disp: DispenseHal, W: Write + Unpin>(
     #[derive(Deserialize)]
     struct Body {
         name: String,
+        /// Requested cocktail size; resolved to a volume via `glass_types` config.
+        size: String,
         items: Vec<JobItem>,
         #[serde(default)]
-        require_glass: bool,
-        #[serde(default)]
         parallel: bool,
-        #[serde(default)]
-        timeout_ms: Option<u64>,
     }
 
     let body: Body = match http::parse_body(request) {
@@ -116,17 +111,15 @@ pub async fn handle_create_job<Disp: DispenseHal, W: Write + Unpin>(
     };
 
     let job_id = generate_job_id(&body.name);
-    let timeout = Duration::from_millis(body.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS));
+
+    // TODO: resolve body.size against config.glass_types to get volume_ml,
+    // compute part_ml = volume_ml / total_parts, and scale each item to ml
+    // before passing to the HAL. Return HTTP 422 if size is not found.
+    // Also: wait for glass_sensor.present == true before dispatching.
+    let _ = &body.size;
 
     match dispense
-        .create_job(
-            job_id,
-            body.name,
-            body.items,
-            body.require_glass,
-            body.parallel,
-            timeout.into(),
-        )
+        .create_job(job_id, body.name, body.items, body.parallel)
         .await
     {
         Ok(created) => {

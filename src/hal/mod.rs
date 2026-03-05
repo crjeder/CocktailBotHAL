@@ -2,14 +2,12 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::time::Duration;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RobotState {
     Off,
-    Booting,
     SelfTest,
     Idle,
     Prepared,
@@ -27,11 +25,25 @@ pub struct ErrorInfo {
     pub recoverable: bool,
 }
 
+/// Hardware-agnostic calibration for a single liquid.
+///
+/// The `factor` is a dimensionless multiplier the HAL implementation uses to
+/// compensate for liquid-specific properties (density, viscosity, flow rate).
+/// Its exact interpretation depends on the hardware: for weight-based
+/// dispensing it is the density in g/ml; for time-based dispensing it is a
+/// seconds-per-ml multiplier; etc.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LiquidCalibration {
-    pub ml_per_sec: f32,
-    pub prime_ms: u32,
-    pub viscosity_factor: f32,
+    pub factor: f32,
+}
+
+/// Maps a named cocktail size to a target glass volume.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlassType {
+    /// Size name, e.g. `"short"`, `"medium"`, `"long"`.
+    pub id: String,
+    /// Target fill volume in millilitres.
+    pub volume_ml: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -62,9 +74,11 @@ pub enum LevelReporting {
 pub struct RobotConfig {
     pub version: String,
     pub liquids: Vec<LiquidConfig>,
-    pub part_ml: f32,
+    /// Available glass sizes. The server resolves the target volume for a
+    /// dispensing job by matching the requested size against this list.
+    pub glass_types: Vec<GlassType>,
+    /// Maximum total parts accepted in a single job (safety limit).
     pub max_total_parts: u16,
-    pub max_channels_per_job: u8,
     pub capabilities: Capabilities,
     /// Bearer token required to authenticate API requests.
     /// An empty string causes the server to fall back to the compile-time default.
@@ -178,9 +192,7 @@ pub trait DispenseHal {
         job_id: String,
         name: String,
         items: Vec<JobItem>,
-        require_glass: bool,
         parallel: bool,
-        timeout: Duration,
     ) -> Result<JobCreated, ErrorInfo>;
 
     async fn list_jobs(&self) -> Vec<JobStatus>;

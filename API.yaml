@@ -37,12 +37,28 @@ components:
         recoverable:
           type: boolean
 
+    GlassType:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Size name, e.g. "short", "medium", "long".
+        volume_ml:
+          type: number
+          description: Target fill volume in milliliters.
+
     LiquidCalibration:
       type: object
       properties:
-        kv_data:
-          type: string
-        
+        factor:
+          type: number
+          description: |
+            Hardware-agnostic calibration multiplier for this liquid.
+            Interpretation is HAL-implementation-specific (e.g. density in g/ml
+            for weight-based dispensing, seconds/ml for time-based). A value of
+            1.0 delivers the computed volume without adjustment.
+
+
     LiquidConfig:
       type: object
       properties:
@@ -78,11 +94,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/LiquidConfig'
-        limits:
-          type: object
-          properties:
-            max_total_parts:
-              type: integer
+        glass_types:
+          type: array
+          description: Available glass sizes; maps size names to target volumes.
+          items:
+            $ref: '#/components/schemas/GlassType'
+        max_total_parts:
+          type: integer
+          description: Maximum total parts accepted in a single job (safety limit).
         capabilities:
           $ref: '#/components/schemas/Capabilities'
 
@@ -144,11 +163,18 @@ components:
       type: object
       required:
         - name
+        - size
         - items
       properties:
         name:
           type: string
           description: Human-readable label for the drink order (e.g. Marty's Margarita). Need not be unique.
+        size:
+          type: string
+          enum: [short, medium, long]
+          description: |
+            Requested cocktail size. The server resolves the target volume by
+            looking up this value in the active config's `glass_types` list.
         items:
           type: array
           items:

@@ -4,7 +4,6 @@
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::time::Duration;
 
 use crate::hal::{DispenseHal, ErrorInfo, JobCreated, JobItem, JobStatus};
 
@@ -23,9 +22,7 @@ impl DispenseHal for Esp32Dispense {
         job_id: String,
         _name: String,
         _items: Vec<JobItem>,
-        _require_glass: bool,
         _parallel: bool,
-        _timeout: Duration,
     ) -> Result<JobCreated, ErrorInfo> {
         // TODO: wire to hardware — enqueue job to dispense task scheduler
         Ok(JobCreated {

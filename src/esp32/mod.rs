@@ -18,7 +18,6 @@ mod storage;
 
 use alloc::string::String;
 use alloc::vec::Vec;
-use core::time::Duration;
 
 use cleaning::Esp32Cleaning;
 use config::Esp32Config;
@@ -136,13 +135,9 @@ impl DispenseHal for Esp32Hal {
         job_id: String,
         name: String,
         items: Vec<JobItem>,
-        require_glass: bool,
         parallel: bool,
-        timeout: Duration,
     ) -> Result<JobCreated, ErrorInfo> {
-        self.dispense
-            .create_job(job_id, name, items, require_glass, parallel, timeout)
-            .await
+        self.dispense.create_job(job_id, name, items, parallel).await
     }
 
     async fn list_jobs(&self) -> Vec<JobStatus> {
