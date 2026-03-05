@@ -47,6 +47,8 @@ pub struct Capabilities {
     pub level_reporting: LevelReporting,
     pub glass_typing: bool,
     pub simultaneous_channels: u8,
+    /// Maximum number of jobs (running + queued) accepted simultaneously.
+    pub max_queue_depth: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -111,10 +113,20 @@ impl Serialize for JobState {
     }
 }
 
+/// Returned by `DispenseHal::create_job` on success.
+#[derive(Debug, Clone, Serialize)]
+pub struct JobCreated {
+    /// Server-generated unique job identifier.
+    pub job_id: String,
+    /// 1-based position in the queue (1 = next to be dispensed).
+    pub queue_position: u8,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct JobStatus {
     pub job_id: String,
-    pub client_job_id: String,
+    /// Human-readable label supplied by the client at creation time.
+    pub name: String,
     pub state: JobState,
     pub progress_pct: u8,
 }
@@ -163,12 +175,13 @@ pub trait SensorHal {
 pub trait DispenseHal {
     async fn create_job(
         &mut self,
-        client_job_id: String,
+        job_id: String,
+        name: String,
         items: Vec<JobItem>,
         require_glass: bool,
         parallel: bool,
         timeout: Duration,
-    ) -> Result<String, ErrorInfo>; // returns job_id
+    ) -> Result<JobCreated, ErrorInfo>;
 
     async fn list_jobs(&self) -> Vec<JobStatus>;
     async fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo>;

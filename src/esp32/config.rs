@@ -27,6 +27,7 @@ fn default_config() -> RobotConfig {
             level_reporting: LevelReporting::Binary,
             glass_typing: false,
             simultaneous_channels: 1,
+            max_queue_depth: 5,
         },
         token: String::new(),
     }

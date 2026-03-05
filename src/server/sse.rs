@@ -82,7 +82,7 @@ async fn emit_job_event<W: Write + Unpin>(socket: &mut W, job: &JobStatus) -> Re
         "job_update",
         &serde_json::json!({
             "job_id": job.job_id,
-            "client_job_id": job.client_job_id,
+            "name": job.name,
             "state": job.state,
             "progress_pct": job.progress_pct,
         }),

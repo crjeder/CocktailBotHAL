@@ -65,6 +65,9 @@ components:
           type: boolean
         simultaneous_channels:
           type: integer
+        max_queue_depth:
+          type: integer
+          description: Maximum number of jobs (running + queued) accepted simultaneously.
 
     Config:
       type: object
@@ -139,9 +142,13 @@ components:
 
     JobCreateRequest:
       type: object
+      required:
+        - name
+        - items
       properties:
-        client_job_id:
+        name:
           type: string
+          description: Human-readable label for the drink order (e.g. Marty's Margarita). Need not be unique.
         items:
           type: array
           items:
@@ -149,13 +156,24 @@ components:
         parallel:
           type: boolean
 
+    JobCreateResponse:
+      type: object
+      properties:
+        job_id:
+          type: string
+          description: Server-generated unique job identifier.
+        queue_position:
+          type: integer
+          description: 1-based position in the queue (1 = next to be dispensed).
+
     JobStatus:
       type: object
       properties:
         job_id:
           type: string
-        client_job_id:
+        name:
           type: string
+          description: Human-readable label supplied by the client at job creation.
         state:
           type: string
           enum: [queued, running, done, cancelled, error]
@@ -314,8 +332,22 @@ paths:
             schema:
               $ref: '#/components/schemas/JobCreateRequest'
       responses:
-        '202':
-          description: Job accepted
+        '201':
+          description: Job accepted and queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobCreateResponse'
+        '503':
+          description: Job queue is full
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: queue full
 
     get:
       summary: List job queue and history
@@ -372,7 +404,7 @@ paths:
         `job_update` — emitted when a dispensing job is created,
         progresses, completes, or is cancelled.
         ```json
-        {"job_id": "abc", "client_job_id": "xyz",
+        {"job_id": "abc", "name": "xyz",
          "state": "running", "progress_pct": 45}
         ```
       responses:

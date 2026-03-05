@@ -29,8 +29,8 @@ use status::Esp32Status;
 use storage::Esp32Storage;
 
 use crate::hal::{
-    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobItem,
-    JobStatus, LevelState, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobCreated,
+    JobItem, JobStatus, LevelState, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
 };
 
 /// Composite HAL implementation for ESP32.
@@ -133,14 +133,15 @@ impl SensorHal for Esp32Hal {
 impl DispenseHal for Esp32Hal {
     async fn create_job(
         &mut self,
-        client_job_id: String,
+        job_id: String,
+        name: String,
         items: Vec<JobItem>,
         require_glass: bool,
         parallel: bool,
         timeout: Duration,
-    ) -> Result<String, ErrorInfo> {
+    ) -> Result<JobCreated, ErrorInfo> {
         self.dispense
-            .create_job(client_job_id, items, require_glass, parallel, timeout)
+            .create_job(job_id, name, items, require_glass, parallel, timeout)
             .await
     }
 

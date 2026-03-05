@@ -24,10 +24,11 @@ use alloc::vec::Vec;
 use core::time::Duration;
 
 #[cfg(not(test))]
-use embassy_executor::Executor;
+use embassy_executor::{Executor, Spawner};
 use hal::{
-    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobItem,
-    JobStatus, LevelState, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState,
+    JobCreated, JobItem, JobStatus, LevelReporting, LevelState, LiquidCalibration, LiquidConfig,
+    RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
@@ -73,7 +74,29 @@ struct StubConfigHal;
 
 impl ConfigHal for StubConfigHal {
     async fn get_active_config(&self) -> RobotConfig {
-        todo!()
+        RobotConfig {
+            version: String::from("0.3.0"),
+            liquids: vec![LiquidConfig {
+                id: String::from("water"),
+                name: String::from("Water"),
+                position: 0,
+                calibration: LiquidCalibration {
+                    ml_per_sec: 10.0,
+                    prime_ms: 200,
+                    viscosity_factor: 1.0,
+                },
+            }],
+            part_ml: 30.0,
+            max_total_parts: 10,
+            max_channels_per_job: 2,
+            capabilities: Capabilities {
+                level_reporting: LevelReporting::Binary,
+                glass_typing: false,
+                simultaneous_channels: 1,
+                max_queue_depth: 5,
+            },
+            token: String::new(),
+        }
     }
     async fn update_active_config(&mut self, _cfg: RobotConfig) -> Result<(), ErrorInfo> {
         todo!()
@@ -111,13 +134,17 @@ struct StubDispenseHal;
 impl DispenseHal for StubDispenseHal {
     async fn create_job(
         &mut self,
-        _client_job_id: String,
+        job_id: String,
+        _name: String,
         _items: Vec<JobItem>,
         _require_glass: bool,
         _parallel: bool,
         _timeout: Duration,
-    ) -> Result<String, ErrorInfo> {
-        todo!()
+    ) -> Result<JobCreated, ErrorInfo> {
+        Ok(JobCreated {
+            job_id,
+            queue_position: 1,
+        })
     }
     async fn list_jobs(&self) -> Vec<JobStatus> {
         vec![]
@@ -145,7 +172,7 @@ impl CleaningHal for StubCleaningHal {
 // Entry point
 //
 // Runs the embassy spin executor for host/development builds.
-// Constructs all stub HAL instances and creates ApiServer.
+// Constructs all stub HAL instances and creates ApiServer + SseServer.
 //
 // TODO (ESP32 bring-up): Replace this entire section with the BSP-provided
 // async entry point using esp-hal:
@@ -156,6 +183,13 @@ impl CleaningHal for StubCleaningHal {
 //       esp_hal_embassy::init(/* timer */);
 //       // initialise embassy-net stack with esp-wifi ...
 //       let net_stack = /* ... */;
+//       spawner
+//           .spawn(sse_task(
+//               SSE_STATUS.init(/* real StatusHal */),
+//               SSE_DISPENSE.init(/* real DispenseHal */),
+//               net_stack,
+//           ))
+//           .unwrap();
 //       ApiServer { hal: RobotHal { /* real drivers */ } }
 //           .run(net_stack)
 //           .await;
@@ -165,8 +199,33 @@ impl CleaningHal for StubCleaningHal {
 // The spin executor is initialised manually below.
 // ============================================================================
 
+/// Static storage for the StatusHal instance used by the SSE server.
+///
+/// Kept separate from the ApiServer's HAL so SseServer can hold a `'static`
+/// reference without requiring a `Mutex` for its read-only access pattern.
+#[cfg(not(test))]
+static SSE_STATUS: StaticCell<StubStatusHal> = StaticCell::new();
+
+/// Static storage for the DispenseHal instance used by the SSE server (read
+/// path only — job listing for change detection).
+#[cfg(not(test))]
+static SSE_DISPENSE: StaticCell<StubDispenseHal> = StaticCell::new();
+
 #[cfg(not(test))]
 static EXECUTOR: StaticCell<Executor> = StaticCell::new();
+
+/// SSE server task — streams robot state and job updates to the display client
+/// on port 9000 (single connection at a time).
+///
+/// In a real bring-up, wire `net_stack` from esp-hal-embassy and call:
+///   server::sse::SseServer { status, dispense }.run(net_stack).await;
+#[cfg(not(test))]
+#[embassy_executor::task]
+async fn sse_task(status: &'static StubStatusHal, dispense: &'static StubDispenseHal) {
+    // Real call (requires embassy-net stack):
+    //   server::sse::SseServer { status, dispense }.run(net_stack).await;
+    let _ = (status, dispense);
+}
 
 /// Async stub entry task — constructs all HAL stubs and the API server.
 ///
@@ -174,24 +233,21 @@ static EXECUTOR: StaticCell<Executor> = StaticCell::new();
 /// wired to actual hardware drivers and a live embassy-net stack.
 #[cfg(not(test))]
 #[embassy_executor::task]
-async fn async_main() {
-    let control = StubControlHal;
-    let status = StubStatusHal;
-    let config = StubConfigHal;
-    let storage = StubStorageHal;
-    let sensors = StubSensorHal;
-    let dispense = StubDispenseHal;
-    let cleaning = StubCleaningHal;
+async fn async_main(spawner: Spawner) {
+    // Initialise static HAL instances for the SSE read path.
+    let sse_status = SSE_STATUS.init(StubStatusHal);
+    let sse_dispense = SSE_DISPENSE.init(StubDispenseHal);
+    spawner.spawn(sse_task(sse_status, sse_dispense)).unwrap();
 
     let _server = ApiServer {
         hal: RobotHal {
-            control,
-            status,
-            config,
-            storage,
-            sensors,
-            dispense,
-            cleaning,
+            control: StubControlHal,
+            status: StubStatusHal,
+            config: StubConfigHal,
+            storage: StubStorageHal,
+            sensors: StubSensorHal,
+            dispense: StubDispenseHal,
+            cleaning: StubCleaningHal,
         },
     };
     // Real call: _server.run(net_stack).await — wire to embassy-net stack.
@@ -201,6 +257,6 @@ async fn async_main() {
 fn main() {
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        spawner.spawn(async_main()).unwrap();
+        spawner.spawn(async_main(spawner)).unwrap();
     });
 }

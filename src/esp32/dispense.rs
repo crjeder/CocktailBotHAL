@@ -6,7 +6,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::time::Duration;
 
-use crate::hal::{DispenseHal, ErrorInfo, JobItem, JobStatus};
+use crate::hal::{DispenseHal, ErrorInfo, JobCreated, JobItem, JobStatus};
 
 /// Stub implementation of [`DispenseHal`] for ESP32.
 pub struct Esp32Dispense;
@@ -20,15 +20,18 @@ impl Esp32Dispense {
 impl DispenseHal for Esp32Dispense {
     async fn create_job(
         &mut self,
-        client_job_id: String,
+        job_id: String,
+        _name: String,
         _items: Vec<JobItem>,
         _require_glass: bool,
         _parallel: bool,
         _timeout: Duration,
-    ) -> Result<String, ErrorInfo> {
+    ) -> Result<JobCreated, ErrorInfo> {
         // TODO: wire to hardware — enqueue job to dispense task scheduler
-        let job_id = alloc::format!("stub-job-{}", client_job_id);
-        Ok(job_id)
+        Ok(JobCreated {
+            job_id,
+            queue_position: 1,
+        })
     }
 
     async fn list_jobs(&self) -> Vec<JobStatus> {
