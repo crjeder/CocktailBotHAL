@@ -268,6 +268,8 @@ pub trait PasswordHasher {
 }
 
 #[cfg(test)]
+pub(crate) mod mock;
+#[cfg(test)]
 mod tests;
 
 // ============================================================================

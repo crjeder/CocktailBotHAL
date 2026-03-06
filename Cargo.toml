@@ -20,4 +20,6 @@ pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"], opti
 esp32 = ["dep:sha2", "dep:pbkdf2"]
 
 [dev-dependencies]
-#test-case = "3.2"
+test-case = "3.2"
+embedded-hal-mock = "0.7.2"
+futures = { version = "0.3", default-features = false, features = ["executor"] }

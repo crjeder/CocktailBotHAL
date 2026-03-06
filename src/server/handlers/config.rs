@@ -233,3 +233,77 @@ pub async fn handle_restore<
     .await
     .ok();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hal::mock::{
+        test_admin_config, test_robot_config, MockConfigHal, MockDispenseHal, MockPasswordHasher,
+        MockStorageHal, MockWrite,
+    };
+    use crate::server::http::HttpRequest;
+    use futures::executor::block_on;
+
+    #[test]
+    fn config_get_returns_200_with_config() {
+        block_on(async {
+            let cfg = MockConfigHal::new(test_robot_config());
+            let mut buf = MockWrite::new();
+            handle_config_get(&cfg, &mut buf).await;
+            let resp = buf.as_str();
+            assert!(resp.contains("HTTP/1.1 200"));
+            assert!(resp.contains("vodka"));
+        });
+    }
+
+    #[test]
+    fn config_get_redacts_admin_password() {
+        block_on(async {
+            let mut robot_cfg = test_robot_config();
+            robot_cfg.admin_password = "hashed$secret".to_string();
+            let cfg = MockConfigHal::new(robot_cfg);
+            let mut buf = MockWrite::new();
+            handle_config_get(&cfg, &mut buf).await;
+            assert!(!buf.as_str().contains("hashed$secret"));
+        });
+    }
+
+    #[test]
+    fn config_patch_returns_200() {
+        block_on(async {
+            let admin = test_admin_config();
+            let body = serde_json::to_string(&admin).unwrap();
+            let req = HttpRequest {
+                method: "PATCH".to_string(),
+                path: "/v1/config".to_string(),
+                headers: alloc::vec![],
+                body: body.into_bytes(),
+            };
+            let mut cfg = MockConfigHal::new(test_robot_config());
+            let mut storage = MockStorageHal::new();
+            let mut dispense = MockDispenseHal::new();
+            let hasher = MockPasswordHasher;
+            let mut buf = MockWrite::new();
+            handle_config_patch(
+                &mut cfg,
+                &mut storage,
+                &mut dispense,
+                &hasher,
+                &req,
+                &mut buf,
+            )
+            .await;
+            assert!(buf.as_str().contains("HTTP/1.1 200"));
+        });
+    }
+
+    #[test]
+    fn config_backup_no_config_returns_500() {
+        block_on(async {
+            let storage = MockStorageHal::new();
+            let mut buf = MockWrite::new();
+            handle_backup(&storage, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+}

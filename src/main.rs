@@ -17,18 +17,22 @@ mod esp32;
 mod hal;
 #[cfg(not(test))]
 mod server;
+#[cfg(test)]
+#[allow(unused)]
+mod server;
+mod storage;
 
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
+use storage::RamStorageHal;
 
 #[cfg(not(test))]
 use embassy_executor::{Executor, Spawner};
 use hal::{
-    AdminConfig, BackupPayload, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal,
-    ErrorInfo, GlassSensorState, GlassType, JobCreated, JobItem, JobStatus, LevelReporting,
-    LevelState, LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState,
-    SensorHal, StatusHal, StorageHal,
+    AdminConfig, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
+    GlassSensorState, GlassType, JobCreated, JobItem, JobStatus, LevelReporting, LevelState,
+    LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
@@ -106,40 +110,6 @@ impl ConfigHal for StubConfigHal {
     }
     async fn update_active_config(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {
         todo!()
-    }
-}
-
-struct StubStorageHal {
-    stored: Option<AdminConfig>,
-}
-
-impl StubStorageHal {
-    fn new() -> Self {
-        StubStorageHal { stored: None }
-    }
-}
-
-impl StorageHal for StubStorageHal {
-    async fn backup(&self) -> Result<BackupPayload, ErrorInfo> {
-        // Returns Err when nothing has been stored yet (simulates empty flash).
-        let admin_cfg = self.stored.clone().ok_or_else(|| ErrorInfo {
-            code: String::from("NO_CONFIG"),
-            message: String::from("No configuration stored"),
-            hint: Some(String::from("POST /v1/config/restore to provision")),
-            recoverable: true,
-        })?;
-        let json = serde_json::to_string(&admin_cfg).unwrap_or_default();
-        let checksum = hal::crc32_hex(json.as_bytes());
-        Ok(BackupPayload {
-            data: admin_cfg,
-            checksum,
-            backed_up_at: String::from("1970-01-01T00:00:00Z"),
-        })
-    }
-
-    async fn restore(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo> {
-        self.stored = Some(cfg);
-        Ok(())
     }
 }
 
@@ -293,7 +263,7 @@ async fn async_main(spawner: Spawner) {
             control: StubControlHal,
             status: StubStatusHal,
             config: StubConfigHal,
-            storage: StubStorageHal::new(),
+            storage: RamStorageHal::new(),
             sensors: StubSensorHal,
             dispense: StubDispenseHal,
             cleaning: StubCleaningHal,
@@ -310,3 +280,15 @@ fn main() {
         spawner.spawn(async_main(spawner)).unwrap();
     });
 }
+
+// Provide no-op embassy-time driver symbols so the server module can link
+// in test builds without a real hardware timer.
+#[cfg(test)]
+#[no_mangle]
+fn _embassy_time_now() -> u64 {
+    0
+}
+
+#[cfg(test)]
+#[no_mangle]
+fn _embassy_time_schedule_wake(_at: u64, _waker: &core::task::Waker) {}

@@ -1,5 +1,46 @@
 ## Claude Session Progress
 
+### 2026-03-06: implement-test-hal (v0.5.0, no version bump — dev tooling only)
+
+**Changes made:**
+- `Cargo.toml`: Added `futures = "0.3"` dev-dep (for `block_on` in tests); confirmed
+  `embedded-hal-mock = "0.7.2"` and `test-case = "3.2"` already in `[dev-dependencies]`
+- `src/hal/mock.rs` (NEW): Test-only mock implementations for all 7 HAL traits
+  (`MockControlHal`, `MockStatusHal`, `MockConfigHal`, `MockStorageHal`, `MockSensorHal`,
+  `MockDispenseHal`, `MockCleaningHal`) plus `MockPasswordHasher` and `MockWrite`
+  (embedded_io_async::Write backed by Vec<u8>). Each mock has stateful inspection fields,
+  `fail_next`/`restore_fail`/`fail` for error injection, and a `done()` assertion.
+  Helper functions: `test_error()`, `test_robot_config()`, `test_admin_config()`.
+- `src/hal/mod.rs`: Added `#[cfg(test)] pub(crate) mod mock;`
+- `src/hal/tests.rs`: Complete rewrite — all 7 trait test groups updated to current API
+  (AdminConfig, backup/restore, JobCreated, async fn with block_on). Added `#[test_case]`
+  parameterisation for RobotState, JobState, LevelReporting serialization. Added
+  `crc32_hex_consistent` test.
+- `src/main.rs`: Added `#[cfg(test)] mod server;` so handler files compile in test mode.
+  Added `#[no_mangle] fn _embassy_time_now()` and `_embassy_time_schedule_wake()` no-op
+  stubs so embassy-time links in test builds without a real time driver.
+- `src/server/handlers/status.rs`: Added `#[cfg(test)]` block (2 tests)
+- `src/server/handlers/control.rs`: Added `#[cfg(test)]` block (4 tests)
+- `src/server/handlers/config.rs`: Added `#[cfg(test)]` block (4 tests)
+- `src/server/handlers/sensors.rs`: Added `#[cfg(test)]` block (4 tests)
+- `src/server/handlers/dispense.rs`: Added `#[cfg(test)]` block (4 tests)
+- `src/server/handlers/cleaning.rs`: Added `#[cfg(test)]` block (4 tests)
+
+**Status:** `cargo test` passes — 106 tests total (0 failed).
+`cargo build` and `cargo check --features esp32` both clean.
+
+**Key discovery:** embassy-time requires `_embassy_time_now` and `_embassy_time_schedule_wake`
+symbols (Rust ABI, `#[no_mangle]`) when linked in test binaries. Provided as no-op stubs in
+main.rs under `#[cfg(test)]`.
+
+**Next steps:**
+- Archive `implement-test-hal` change
+- Implement glass-type size→volume lookup and part_ml scaling in dispense handler
+- StorageHal: no concrete implementation (stubs return NOT_IMPLEMENTED error)
+- SSE events: event model not designed yet
+- ESP32 bring-up: `#[esp_hal::main]` + esp-hal/esp-hal-embassy/esp-wifi deps
+
+
 ### 2026-03-06: add-admin-password-auth (v0.4.0 → remains v0.4.0, backwards-compatible addition)
 
 **Branch:** claude/add-admin-password-auth-3Mjmi

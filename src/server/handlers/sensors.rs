@@ -34,3 +34,57 @@ pub async fn handle_levels<Sens: SensorHal, W: Write + Unpin>(sensors: &Sens, so
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hal::mock::{test_error, MockSensorHal, MockWrite};
+    use futures::executor::block_on;
+
+    #[test]
+    fn sensors_glass_returns_200_when_absent() {
+        block_on(async {
+            let hal = MockSensorHal::new();
+            let mut buf = MockWrite::new();
+            handle_glass(&hal, &mut buf).await;
+            let resp = buf.as_str();
+            assert!(resp.contains("HTTP/1.1 200"));
+            assert!(resp.contains("\"present\":false"));
+        });
+    }
+
+    #[test]
+    fn sensors_glass_returns_200_when_present() {
+        block_on(async {
+            let hal = MockSensorHal::new().with_glass(true);
+            let mut buf = MockWrite::new();
+            handle_glass(&hal, &mut buf).await;
+            let resp = buf.as_str();
+            assert!(resp.contains("HTTP/1.1 200"));
+            assert!(resp.contains("\"present\":true"));
+        });
+    }
+
+    #[test]
+    fn sensors_glass_hal_error_returns_500() {
+        block_on(async {
+            let hal = MockSensorHal {
+                fail: Some(test_error()),
+                ..MockSensorHal::new()
+            };
+            let mut buf = MockWrite::new();
+            handle_glass(&hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+
+    #[test]
+    fn sensors_levels_returns_200() {
+        block_on(async {
+            let hal = MockSensorHal::new();
+            let mut buf = MockWrite::new();
+            handle_levels(&hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 200"));
+        });
+    }
+}

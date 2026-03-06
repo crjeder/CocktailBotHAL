@@ -189,3 +189,59 @@ pub async fn handle_cancel_job<Disp: DispenseHal, W: Write + Unpin>(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hal::mock::{test_error, MockDispenseHal, MockWrite};
+    use futures::executor::block_on;
+
+    #[test]
+    fn dispense_list_jobs_empty_returns_200() {
+        block_on(async {
+            let hal = MockDispenseHal::new();
+            let mut buf = MockWrite::new();
+            handle_list_jobs(&hal, &mut buf).await;
+            let resp = buf.as_str();
+            assert!(resp.contains("HTTP/1.1 200"));
+            assert!(resp.contains("[]"));
+        });
+    }
+
+    #[test]
+    fn dispense_job_status_not_found_returns_500() {
+        block_on(async {
+            let hal = MockDispenseHal::new();
+            let mut buf = MockWrite::new();
+            handle_job_status(&hal, "nonexistent", &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+
+    #[test]
+    fn dispense_cancel_unknown_job_returns_500() {
+        block_on(async {
+            let mut hal = MockDispenseHal::new();
+            let mut buf = MockWrite::new();
+            handle_cancel_job(&mut hal, "nonexistent", &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+
+    #[test]
+    fn dispense_create_job_hal_error_returns_500() {
+        block_on(async {
+            let mut hal = MockDispenseHal::new();
+            hal.fail_next = Some(test_error());
+            let req = HttpRequest {
+                method: "POST".to_string(),
+                path: "/v1/dispense/jobs".to_string(),
+                headers: alloc::vec![],
+                body: br#"{"name":"test","size":"medium","items":[]}"#.to_vec(),
+            };
+            let mut buf = MockWrite::new();
+            handle_create_job(&mut hal, &req, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+}

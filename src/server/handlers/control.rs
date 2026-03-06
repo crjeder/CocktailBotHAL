@@ -91,3 +91,62 @@ pub async fn handle_reset<Ctrl: ControlHal, W: Write + Unpin>(control: &mut Ctrl
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hal::mock::{test_error, MockControlHal, MockWrite};
+    use crate::server::http::HttpRequest;
+    use futures::executor::block_on;
+
+    fn power_request(on: bool) -> HttpRequest {
+        HttpRequest {
+            method: "POST".to_string(),
+            path: "/v1/control/power".to_string(),
+            headers: alloc::vec![],
+            body: alloc::format!("{{\"on\":{}}}", on).into_bytes(),
+        }
+    }
+
+    #[test]
+    fn control_power_on_returns_202() {
+        block_on(async {
+            let mut hal = MockControlHal::new();
+            let mut buf = MockWrite::new();
+            handle_power(&mut hal, &power_request(true), &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 202"));
+            assert!(hal.powered_on);
+        });
+    }
+
+    #[test]
+    fn control_power_off_returns_202() {
+        block_on(async {
+            let mut hal = MockControlHal::new();
+            let mut buf = MockWrite::new();
+            handle_power(&mut hal, &power_request(false), &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 202"));
+        });
+    }
+
+    #[test]
+    fn control_power_hal_error_returns_500() {
+        block_on(async {
+            let mut hal = MockControlHal::new();
+            hal.fail_next = Some(test_error());
+            let mut buf = MockWrite::new();
+            handle_power(&mut hal, &power_request(true), &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+
+    #[test]
+    fn control_reset_returns_202() {
+        block_on(async {
+            let mut hal = MockControlHal::new();
+            let mut buf = MockWrite::new();
+            handle_reset(&mut hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 202"));
+        });
+    }
+}

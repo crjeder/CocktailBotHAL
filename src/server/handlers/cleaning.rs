@@ -36,3 +36,55 @@ pub async fn handle_stop<Clean: CleaningHal, W: Write + Unpin>(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::hal::mock::{test_error, MockCleaningHal, MockWrite};
+    use futures::executor::block_on;
+
+    #[test]
+    fn cleaning_start_returns_202() {
+        block_on(async {
+            let mut hal = MockCleaningHal::new();
+            let mut buf = MockWrite::new();
+            handle_start(&mut hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 202"));
+            assert!(hal.cleaning);
+        });
+    }
+
+    #[test]
+    fn cleaning_stop_returns_202() {
+        block_on(async {
+            let mut hal = MockCleaningHal::new();
+            hal.cleaning = true;
+            let mut buf = MockWrite::new();
+            handle_stop(&mut hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 202"));
+            assert!(!hal.cleaning);
+        });
+    }
+
+    #[test]
+    fn cleaning_start_hal_error_returns_500() {
+        block_on(async {
+            let mut hal = MockCleaningHal::new();
+            hal.fail_next = Some(test_error());
+            let mut buf = MockWrite::new();
+            handle_start(&mut hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+
+    #[test]
+    fn cleaning_stop_hal_error_returns_500() {
+        block_on(async {
+            let mut hal = MockCleaningHal::new();
+            hal.fail_next = Some(test_error());
+            let mut buf = MockWrite::new();
+            handle_stop(&mut hal, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+}
