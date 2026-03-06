@@ -12,6 +12,7 @@ mod cleaning;
 mod config;
 mod control;
 mod dispense;
+mod hasher;
 mod sensors;
 mod status;
 mod storage;
@@ -23,13 +24,15 @@ use cleaning::Esp32Cleaning;
 use config::Esp32Config;
 use control::Esp32Control;
 use dispense::Esp32Dispense;
+pub use hasher::Esp32PasswordHasher;
 use sensors::Esp32Sensors;
 use status::Esp32Status;
 use storage::Esp32Storage;
 
 use crate::hal::{
     CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobCreated,
-    JobItem, JobStatus, LevelState, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    JobItem, JobStatus, LevelState, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal,
+    StorageHal,
 };
 
 /// Composite HAL implementation for ESP32.
@@ -45,6 +48,7 @@ pub struct Esp32Hal {
     sensors: Esp32Sensors,
     dispense: Esp32Dispense,
     cleaning: Esp32Cleaning,
+    pub hasher: Esp32PasswordHasher,
 }
 
 impl Esp32Hal {
@@ -59,7 +63,18 @@ impl Esp32Hal {
             sensors: Esp32Sensors::new(),
             dispense: Esp32Dispense::new(),
             cleaning: Esp32Cleaning::new(),
+            hasher: Esp32PasswordHasher,
         }
+    }
+}
+
+impl PasswordHasher for Esp32Hal {
+    fn hash(&self, password: &str) -> Result<alloc::string::String, ErrorInfo> {
+        self.hasher.hash(password)
+    }
+
+    fn verify(&self, password: &str, stored_hash: &str) -> bool {
+        self.hasher.verify(password, stored_hash)
     }
 }
 
@@ -137,7 +152,9 @@ impl DispenseHal for Esp32Hal {
         items: Vec<JobItem>,
         parallel: bool,
     ) -> Result<JobCreated, ErrorInfo> {
-        self.dispense.create_job(job_id, name, items, parallel).await
+        self.dispense
+            .create_job(job_id, name, items, parallel)
+            .await
     }
 
     async fn list_jobs(&self) -> Vec<JobStatus> {

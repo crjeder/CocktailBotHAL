@@ -27,7 +27,7 @@ use embassy_executor::{Executor, Spawner};
 use hal::{
     Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState,
     GlassType, JobCreated, JobItem, JobStatus, LevelReporting, LevelState, LiquidCalibration,
-    LiquidConfig, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    LiquidConfig, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
@@ -103,6 +103,7 @@ impl ConfigHal for StubConfigHal {
                 max_queue_depth: 5,
             },
             token: String::new(),
+            admin_password: String::new(),
         }
     }
     async fn update_active_config(&mut self, _cfg: RobotConfig) -> Result<(), ErrorInfo> {
@@ -170,6 +171,32 @@ impl CleaningHal for StubCleaningHal {
     }
     async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
         todo!()
+    }
+}
+
+/// Development-only password hasher.
+///
+/// Stores passwords in the format `stub$<plaintext>` and verifies them with
+/// a constant-time comparison.  Do NOT use in production.
+struct StubPasswordHasher;
+
+impl PasswordHasher for StubPasswordHasher {
+    fn hash(&self, password: &str) -> Result<String, ErrorInfo> {
+        Ok(alloc::format!("stub${}", password))
+    }
+
+    fn verify(&self, password: &str, stored_hash: &str) -> bool {
+        let expected = alloc::format!("stub${}", password);
+        let a = expected.as_bytes();
+        let b = stored_hash.as_bytes();
+        if a.len() != b.len() {
+            return false;
+        }
+        let mut diff: u8 = 0;
+        for (x, y) in a.iter().zip(b.iter()) {
+            diff |= x ^ y;
+        }
+        diff == 0
     }
 }
 
@@ -253,6 +280,7 @@ async fn async_main(spawner: Spawner) {
             sensors: StubSensorHal,
             dispense: StubDispenseHal,
             cleaning: StubCleaningHal,
+            hasher: StubPasswordHasher,
         },
     };
     // Real call: _server.run(net_stack).await — wire to embassy-net stack.

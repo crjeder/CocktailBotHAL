@@ -42,6 +42,7 @@ fn default_config() -> RobotConfig {
             max_queue_depth: 5,
         },
         token: String::new(),
+        admin_password: String::new(),
     }
 }
 

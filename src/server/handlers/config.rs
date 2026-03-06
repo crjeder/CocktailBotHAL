@@ -5,24 +5,33 @@
 use embedded_io_async::Write;
 use serde::Deserialize;
 
-use crate::hal::{ConfigHal, RobotConfig, StorageHal};
+use crate::hal::{ConfigHal, PasswordHasher, RobotConfig, StorageHal};
 use crate::server::http::{self, HttpRequest};
 
 /// GET /v1/config — return active (RAM) configuration.
+///
+/// `admin_password` is always redacted (returned as `""`) so the stored hash
+/// is not exposed to non-admin clients.
 pub async fn handle_config_get<Cfg: ConfigHal, W: Write + Unpin>(config: &Cfg, socket: &mut W) {
-    let cfg = config.get_active_config().await;
+    let mut cfg = config.get_active_config().await;
+    cfg.admin_password = alloc::string::String::new();
     http::write_json(socket, 200, &serde_json::json!(cfg))
         .await
         .ok();
 }
 
 /// PATCH /v1/config — update active (RAM) configuration.
-pub async fn handle_config_patch<Cfg: ConfigHal, W: Write + Unpin>(
+///
+/// If `admin_password` is non-empty in the request body it is treated as a new
+/// plaintext password: it is hashed by `hasher` before being stored.
+/// If `admin_password` is empty the current hash is preserved unchanged.
+pub async fn handle_config_patch<Cfg: ConfigHal, H: PasswordHasher, W: Write + Unpin>(
     config: &mut Cfg,
+    hasher: &H,
     request: &HttpRequest,
     socket: &mut W,
 ) {
-    let cfg: RobotConfig = match http::parse_body(request) {
+    let mut cfg: RobotConfig = match http::parse_body(request) {
         Ok(c) => c,
         Err(_) => {
             http::write_json(
@@ -35,6 +44,22 @@ pub async fn handle_config_patch<Cfg: ConfigHal, W: Write + Unpin>(
             return;
         }
     };
+
+    if cfg.admin_password.is_empty() {
+        // Preserve the current stored hash — client sent "" meaning "keep current password".
+        cfg.admin_password = config.get_active_config().await.admin_password;
+    } else {
+        // Hash the new plaintext password before storing.
+        match hasher.hash(&cfg.admin_password) {
+            Ok(hash) => {
+                cfg.admin_password = hash;
+            }
+            Err(e) => {
+                http::write_hal_error(socket, &e).await.ok();
+                return;
+            }
+        }
+    }
 
     match config.update_active_config(cfg).await {
         Ok(()) => {

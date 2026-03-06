@@ -84,6 +84,12 @@ pub struct RobotConfig {
     /// An empty string causes the server to fall back to the compile-time default.
     #[serde(default)]
     pub token: String,
+    /// Hashed admin password protecting admin-only endpoints (HTTP Basic Auth).
+    /// Stored as a hash string produced by the active `PasswordHasher`; never
+    /// stored as plaintext.  An empty string causes the server to fall back to
+    /// the compile-time default admin password.
+    #[serde(default)]
+    pub admin_password: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -204,6 +210,20 @@ pub trait DispenseHal {
 pub trait CleaningHal {
     async fn start_cleaning(&mut self) -> Result<(), ErrorInfo>;
     async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo>;
+}
+
+/// Hashes and verifies admin passwords.
+///
+/// Implementations are platform-specific: a development stub uses a simple
+/// constant-time string comparison, while the ESP32 implementation uses
+/// PBKDF2-HMAC-SHA256.  The trait is synchronous — callers must not hold
+/// async locks across a `hash` or `verify` call.
+pub trait PasswordHasher {
+    /// Hash `password` and return a storable hash string.
+    fn hash(&self, password: &str) -> Result<String, ErrorInfo>;
+
+    /// Return `true` iff `password` matches `stored_hash`.
+    fn verify(&self, password: &str, stored_hash: &str) -> bool;
 }
 
 #[cfg(test)]

@@ -10,6 +10,13 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        HTTP Basic Auth for admin-only endpoints.  Username is always `admin`;
+        password is the value set via `PATCH /config` (`admin_password` field).
+        Default password is `changeme` — change before deployment.
 
   schemas:
 
@@ -104,6 +111,12 @@ components:
           description: Maximum total parts accepted in a single job (safety limit).
         capabilities:
           $ref: '#/components/schemas/Capabilities'
+        admin_password:
+          type: string
+          description: |
+            Write-only.  When supplied in `PATCH /config`, treated as the new
+            plaintext admin password — it is hashed before storage.  Always
+            returned as `""` in `GET /config` responses (hash is never exposed).
 
     ConfigStoragePayload:
       type: object
@@ -221,6 +234,8 @@ paths:
   /control/power:
     post:
       summary: Power on/off robot hardware
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -235,6 +250,8 @@ paths:
   /control/power-save:
     post:
       summary: Enable or disable power save mode
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -249,6 +266,8 @@ paths:
   /control/reset:
     post:
       summary: Clear error states and reset to idle
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -263,6 +282,8 @@ paths:
   /control/reload-config:
     post:
       summary: Reload configuration from storage into active memory
+      security:
+        - basicAuth: []
       responses:
         '200': { description: Reloaded }
 
@@ -279,6 +300,13 @@ paths:
 
     patch:
       summary: Update active configuration
+      security:
+        - basicAuth: []
+      description: |
+        Update the active (RAM) configuration.  Supplying a non-empty
+        `admin_password` field sets a new admin password — it is hashed
+        before storage.  Send `""` (or omit the field) to keep the current
+        admin password unchanged.
       requestBody:
         content:
           application/json:
@@ -290,6 +318,8 @@ paths:
   /storage/config:
     get:
       summary: Read configuration from non-volatile storage
+      security:
+        - basicAuth: []
       responses:
         '200':
           description: Stored config
@@ -300,6 +330,8 @@ paths:
 
     post:
       summary: Write configuration to non-volatile storage
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -400,12 +432,16 @@ paths:
   /cleaning/start:
     post:
       summary: Start a simple cleaning program
+      security:
+        - basicAuth: []
       responses:
         '200': { description: Started }
 
   /cleaning/stop:
     post:
       summary: Stop cleaning
+      security:
+        - basicAuth: []
       responses:
         '200': { description: Stopped }
 

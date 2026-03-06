@@ -194,6 +194,19 @@ pub fn parse_body<T: serde::de::DeserializeOwned>(request: &HttpRequest) -> Resu
     serde_json::from_slice(&request.body).map_err(|_| HttpError::DeserializeFailed)
 }
 
+/// Decode an `Authorization: Basic <base64>` header value and return the
+/// password component.  The expected credential format is `admin:<password>`.
+/// Returns `None` if the header value does not start with `"Basic "`, the
+/// base64 payload is invalid, or the decoded string contains no `':'`.
+pub fn basic_auth_password(header_value: &str) -> Option<String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let encoded = header_value.strip_prefix("Basic ")?;
+    let decoded = STANDARD.decode(encoded).ok()?;
+    let decoded_str = core::str::from_utf8(&decoded).ok()?;
+    let colon = decoded_str.find(':')?;
+    Some(decoded_str[colon + 1..].into())
+}
+
 /// Map HTTP status codes to reason phrases.
 fn status_reason(code: u16) -> &'static str {
     match code {
