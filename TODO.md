@@ -44,6 +44,27 @@ The following items have been implemented and are no longer open:
   configurable via `RobotConfig::token`; falls back to compile-time default.
 - **Embassy dependencies** — `embassy-net 0.8.0`, `embassy-time 0.5.0`,
   `embedded-io-async 0.7.0` added to `Cargo.toml`.
+- **API.yaml schema gaps** — `GlassType` added; `LiquidCalibration` collapsed to
+  `factor: f32`; `Config` flattened and aligned; `JobCreateRequest` gets required
+  `size` field; `RobotState::Booting` removed. All Rust types and API schema now match.
+
+---
+
+## Dispense Handler: Size → Volume Scaling
+
+`POST /v1/dispense/jobs` accepts a `size` field (`short | medium | long`) but the
+handler does not yet resolve it to a volume or scale ingredient amounts. A `TODO`
+comment marks the location in `src/server/handlers/dispense.rs`:
+
+1. Read active config via `ConfigHal` to get `glass_types`.
+2. Find the matching `GlassType` by `id == size`; return HTTP 422 if not found.
+3. Compute `part_ml = glass_type.volume_ml / total_parts`.
+4. Scale each `JobItem` to ml; apply `LiquidCalibration.factor` per liquid.
+5. Wait for `SensorHal::glass_state().present == true` before dispatching to HAL.
+
+This requires the handler signature to also accept `ConfigHal` and `SensorHal`
+generic parameters (currently only `DispenseHal` is passed).
+
 ---
 
 ## Server-Sent Events (SSE)
@@ -65,20 +86,6 @@ No concrete implementation of `StorageHal` exists anywhere. Provide at
 minimum a RAM-backed stub that satisfies the trait for testing purposes,
 then replace with a real implementation (EEPROM, flash sector, SD card,
 etc.) for production.
-
----
-
-## API.yaml Schema Gaps
-
-The following fields present in Rust types are missing from the `API.yaml`
-schemas:
-
-- `Config.part_ml` (`f32`) — present in `RobotConfig` but absent from
-  schema
-- `Config.max_channels_per_job` (`u8`) — present in `RobotConfig` but
-  absent
-- `JobCreateRequest.require_glass` and `timeout` — parameters on
-  `DispenseHal::create_job` but not in the request schema
 
 ---
 

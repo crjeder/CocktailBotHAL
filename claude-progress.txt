@@ -28,6 +28,31 @@
 - SSE: design event model before implementing GET /v1/events handler
 - API.yaml schema gaps: Config.part_ml, Config.max_channels_per_job, JobCreateRequest fields
 
+### 2026-03-05: fix-api-schema-gaps (v0.4.0)
+
+**Commit:** 305311e
+
+**Changes made:**
+- `src/hal/mod.rs`: Removed `RobotState::Booting`; replaced `LiquidCalibration` (3 pump-specific
+  fields) with single `factor: f32`; added `GlassType { id, volume_ml }`; removed `part_ml` and
+  `max_channels_per_job` from `RobotConfig`; added `glass_types: Vec<GlassType>`;
+  updated `DispenseHal::create_job` to 4 params (removed `require_glass`, `timeout`)
+- `src/esp32/mod.rs`, `dispense.rs`, `config.rs`: Updated to match new types
+- `src/server/handlers/dispense.rs`: Added `size: String` to request body; removed
+  `require_glass`/`timeout`; updated `create_job` call; left TODO for glass-type lookup + scaling
+- `src/main.rs`: Updated all stub literals to new field names
+- `API.yaml`: Added `GlassType` schema; updated `LiquidCalibration`, `Config`, `JobCreateRequest`;
+  flattened `limits` nesting; removed `booting` from State enum
+- OpenSpec: archived `fix-api-schema-gaps`; synced specs (new `cocktail-sizing`, updated `job-queue`)
+
+**Status:** `cargo check` passes (default + `--features esp32`). Zero warnings.
+
+**Next steps:**
+- Implement glass-type size→volume lookup and part_ml scaling in dispense handler
+- StorageHal: no concrete implementation (stubs return NOT_IMPLEMENTED error)
+- SSE events: event model not designed yet
+- ESP32 bring-up: `#[esp_hal::main]` + esp-hal/esp-hal-embassy/esp-wifi deps
+
 ### 2026-03-04: Implement HAL tests with mock implementations
 
 **Branch:** claude/implement-hal-tests-Mby4s
