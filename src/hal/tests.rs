@@ -3,32 +3,48 @@
 // Unit tests for HAL trait implementations using mock objects.
 
 use super::*;
-use core::time::Duration;
 
 // ============================================================================
 // Test helpers
 // ============================================================================
 
-fn test_config() -> RobotConfig {
-    RobotConfig {
-        version: String::from("1.0.0"),
+fn test_admin_config() -> AdminConfig {
+    AdminConfig {
+        token: String::from("secret"),
         liquids: vec![LiquidConfig {
             id: String::from("vodka"),
             name: String::from("Vodka"),
             position: 0,
-            calibration: LiquidCalibration {
-                ml_per_sec: 10.0,
-                prime_ms: 500,
-                viscosity_factor: 1.0,
-            },
+            calibration: LiquidCalibration { factor: 1.0 },
         }],
-        part_ml: 30.0,
+        glass_types: vec![GlassType {
+            id: String::from("short"),
+            volume_ml: 100.0,
+        }],
         max_total_parts: 10,
-        max_channels_per_job: 4,
+    }
+}
+
+fn test_config() -> RobotConfig {
+    RobotConfig {
+        token: String::from("secret"),
+        liquids: vec![LiquidConfig {
+            id: String::from("vodka"),
+            name: String::from("Vodka"),
+            position: 0,
+            calibration: LiquidCalibration { factor: 1.0 },
+        }],
+        glass_types: vec![GlassType {
+            id: String::from("short"),
+            volume_ml: 100.0,
+        }],
+        max_total_parts: 10,
         capabilities: Capabilities {
+            version: String::from("1.0.0"),
             level_reporting: LevelReporting::Binary,
             glass_typing: false,
             simultaneous_channels: 2,
+            max_queue_depth: 5,
         },
     }
 }
@@ -50,7 +66,6 @@ struct MockControlHal {
     powered_on: bool,
     power_save_on: bool,
     errors_reset_count: u32,
-    config_reloaded_count: u32,
     fail_next: Option<ErrorInfo>,
 }
 
@@ -60,14 +75,13 @@ impl MockControlHal {
             powered_on: false,
             power_save_on: false,
             errors_reset_count: 0,
-            config_reloaded_count: 0,
             fail_next: None,
         }
     }
 }
 
 impl ControlHal for MockControlHal {
-    fn power(&mut self, on: bool) -> Result<(), ErrorInfo> {
+    async fn power(&mut self, on: bool) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
@@ -75,7 +89,7 @@ impl ControlHal for MockControlHal {
         Ok(())
     }
 
-    fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo> {
+    async fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
@@ -83,19 +97,11 @@ impl ControlHal for MockControlHal {
         Ok(())
     }
 
-    fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
+    async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
         self.errors_reset_count += 1;
-        Ok(())
-    }
-
-    fn reload_config(&mut self) -> Result<(), ErrorInfo> {
-        if let Some(e) = self.fail_next.take() {
-            return Err(e);
-        }
-        self.config_reloaded_count += 1;
         Ok(())
     }
 }
@@ -129,11 +135,11 @@ impl MockStatusHal {
 }
 
 impl StatusHal for MockStatusHal {
-    fn state(&self) -> RobotState {
+    async fn state(&self) -> RobotState {
         self.state.clone()
     }
 
-    fn active_errors(&self) -> Vec<ErrorInfo> {
+    async fn active_errors(&self) -> Vec<ErrorInfo> {
         self.errors.clone()
     }
 }
@@ -157,15 +163,18 @@ impl MockConfigHal {
 }
 
 impl ConfigHal for MockConfigHal {
-    fn get_active_config(&self) -> RobotConfig {
+    async fn get_active_config(&self) -> RobotConfig {
         self.config.clone()
     }
 
-    fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo> {
+    async fn update_active_config(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
-        self.config = cfg;
+        self.config.token = cfg.token;
+        self.config.liquids = cfg.liquids;
+        self.config.glass_types = cfg.glass_types;
+        self.config.max_total_parts = cfg.max_total_parts;
         Ok(())
     }
 }
@@ -175,7 +184,7 @@ impl ConfigHal for MockConfigHal {
 // ============================================================================
 
 struct MockStorageHal {
-    stored: Option<RobotConfig>,
+    stored: Option<AdminConfig>,
     fail_next: Option<ErrorInfo>,
 }
 
@@ -189,26 +198,25 @@ impl MockStorageHal {
 }
 
 impl StorageHal for MockStorageHal {
-    fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
-        self.stored.clone().ok_or_else(|| ErrorInfo {
-            code: String::from("NO_CONFIG"),
-            message: String::from("No stored configuration"),
-            hint: None,
-            recoverable: false,
-        })
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo> {
+        self.stored
+            .clone()
+            .map(|data| BackupPayload {
+                data,
+                checksum: String::from("00000000"),
+                backed_up_at: String::from("2026-01-01T00:00:00Z"),
+            })
+            .ok_or_else(|| ErrorInfo {
+                code: String::from("NO_CONFIG"),
+                message: String::from("No stored configuration"),
+                hint: None,
+                recoverable: false,
+            })
     }
 
-    fn store_storage_config(&mut self, cfg: RobotConfig, overwrite: bool) -> Result<(), ErrorInfo> {
+    async fn restore(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
-        }
-        if self.stored.is_some() && !overwrite {
-            return Err(ErrorInfo {
-                code: String::from("EXISTS"),
-                message: String::from("Config exists; set overwrite=true"),
-                hint: Some(String::from("Use overwrite flag")),
-                recoverable: true,
-            });
         }
         self.stored = Some(cfg);
         Ok(())
@@ -248,14 +256,14 @@ impl MockSensorHal {
 }
 
 impl SensorHal for MockSensorHal {
-    fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
+    async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
         if let Some(ref e) = self.fail_next {
             return Err(e.clone());
         }
         Ok(self.glass.clone())
     }
 
-    fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
+    async fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
         if let Some(ref e) = self.fail_next {
             return Err(e.clone());
         }
@@ -284,14 +292,13 @@ impl MockDispenseHal {
 }
 
 impl DispenseHal for MockDispenseHal {
-    fn create_job(
+    async fn create_job(
         &mut self,
-        client_job_id: String,
+        _job_id: String,
+        name: String,
         _items: Vec<JobItem>,
-        _require_glass: bool,
         _parallel: bool,
-        _timeout: Duration,
-    ) -> Result<String, ErrorInfo> {
+    ) -> Result<JobCreated, ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
@@ -299,18 +306,21 @@ impl DispenseHal for MockDispenseHal {
         self.next_id += 1;
         self.jobs.push(JobStatus {
             job_id: job_id.clone(),
-            client_job_id,
+            name,
             state: JobState::Queued,
             progress_pct: 0,
         });
-        Ok(job_id)
+        Ok(JobCreated {
+            job_id,
+            queue_position: self.jobs.len() as u8,
+        })
     }
 
-    fn list_jobs(&self) -> Vec<JobStatus> {
+    async fn list_jobs(&self) -> Vec<JobStatus> {
         self.jobs.clone()
     }
 
-    fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
+    async fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
         self.jobs
             .iter()
             .find(|j| j.job_id == job_id)
@@ -323,7 +333,7 @@ impl DispenseHal for MockDispenseHal {
             })
     }
 
-    fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo> {
+    async fn cancel_job(&mut self, job_id: &str) -> Result<(), ErrorInfo> {
         if let Some(job) = self.jobs.iter_mut().find(|j| j.job_id == job_id) {
             job.state = JobState::Cancelled;
             Ok(())
@@ -357,7 +367,7 @@ impl MockCleaningHal {
 }
 
 impl CleaningHal for MockCleaningHal {
-    fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
+    async fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
@@ -373,13 +383,39 @@ impl CleaningHal for MockCleaningHal {
         Ok(())
     }
 
-    fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
+    async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
             return Err(e);
         }
         self.cleaning = false;
         Ok(())
     }
+}
+
+// ============================================================================
+// Helper to run async tests in a blocking context
+// ============================================================================
+
+fn block_on<F: core::future::Future>(f: F) -> F::Output {
+    // Minimal single-step poll executor for unit tests.
+    // All mocks resolve immediately so one poll suffices.
+    let mut f = core::pin::pin!(f);
+    let waker = noop_waker();
+    let mut cx = core::task::Context::from_waker(&waker);
+    match f.as_mut().poll(&mut cx) {
+        core::task::Poll::Ready(v) => v,
+        core::task::Poll::Pending => panic!("async test unexpectedly returned Pending"),
+    }
+}
+
+fn noop_waker() -> core::task::Waker {
+    use core::task::{RawWaker, RawWakerVTable, Waker};
+    fn no_op(_: *const ()) {}
+    fn clone(p: *const ()) -> RawWaker {
+        RawWaker::new(p, &VTABLE)
+    }
+    static VTABLE: RawWakerVTable = RawWakerVTable::new(clone, no_op, no_op, no_op);
+    unsafe { Waker::from_raw(RawWaker::new(core::ptr::null(), &VTABLE)) }
 }
 
 // ============================================================================
@@ -390,48 +426,41 @@ impl CleaningHal for MockCleaningHal {
 fn control_power_on() {
     let mut hal = MockControlHal::new();
     assert!(!hal.powered_on);
-    hal.power(true).unwrap();
+    block_on(hal.power(true)).unwrap();
     assert!(hal.powered_on);
 }
 
 #[test]
 fn control_power_off() {
     let mut hal = MockControlHal::new();
-    hal.power(true).unwrap();
-    hal.power(false).unwrap();
+    block_on(hal.power(true)).unwrap();
+    block_on(hal.power(false)).unwrap();
     assert!(!hal.powered_on);
 }
 
 #[test]
 fn control_power_save_toggle() {
     let mut hal = MockControlHal::new();
-    hal.power_save(true).unwrap();
+    block_on(hal.power_save(true)).unwrap();
     assert!(hal.power_save_on);
-    hal.power_save(false).unwrap();
+    block_on(hal.power_save(false)).unwrap();
     assert!(!hal.power_save_on);
 }
 
 #[test]
 fn control_reset_errors() {
     let mut hal = MockControlHal::new();
-    hal.reset_errors().unwrap();
+    block_on(hal.reset_errors()).unwrap();
     assert_eq!(hal.errors_reset_count, 1);
-    hal.reset_errors().unwrap();
+    block_on(hal.reset_errors()).unwrap();
     assert_eq!(hal.errors_reset_count, 2);
-}
-
-#[test]
-fn control_reload_config() {
-    let mut hal = MockControlHal::new();
-    hal.reload_config().unwrap();
-    assert_eq!(hal.config_reloaded_count, 1);
 }
 
 #[test]
 fn control_power_error_propagation() {
     let mut hal = MockControlHal::new();
     hal.fail_next = Some(test_error());
-    let err = hal.power(true).unwrap_err();
+    let err = block_on(hal.power(true)).unwrap_err();
     assert_eq!(err.code, "E001");
     assert!(!hal.powered_on);
 }
@@ -440,8 +469,8 @@ fn control_power_error_propagation() {
 fn control_error_clears_after_one_call() {
     let mut hal = MockControlHal::new();
     hal.fail_next = Some(test_error());
-    assert!(hal.power(true).is_err());
-    assert!(hal.power(true).is_ok());
+    assert!(block_on(hal.power(true)).is_err());
+    assert!(block_on(hal.power(true)).is_ok());
     assert!(hal.powered_on);
 }
 
@@ -452,25 +481,25 @@ fn control_error_clears_after_one_call() {
 #[test]
 fn status_default_is_off() {
     let hal = MockStatusHal::new();
-    assert_eq!(hal.state(), RobotState::Off);
+    assert_eq!(block_on(hal.state()), RobotState::Off);
 }
 
 #[test]
 fn status_returns_configured_state() {
     let hal = MockStatusHal::new().with_state(RobotState::Idle);
-    assert_eq!(hal.state(), RobotState::Idle);
+    assert_eq!(block_on(hal.state()), RobotState::Idle);
 }
 
 #[test]
 fn status_no_errors_by_default() {
     let hal = MockStatusHal::new();
-    assert!(hal.active_errors().is_empty());
+    assert!(block_on(hal.active_errors()).is_empty());
 }
 
 #[test]
 fn status_returns_configured_errors() {
     let hal = MockStatusHal::new().with_errors(vec![test_error()]);
-    let errors = hal.active_errors();
+    let errors = block_on(hal.active_errors());
     assert_eq!(errors.len(), 1);
     assert_eq!(errors[0].code, "E001");
 }
@@ -479,9 +508,9 @@ fn status_returns_configured_errors() {
 fn status_all_robot_states() {
     let states = vec![
         RobotState::Off,
-        RobotState::Booting,
         RobotState::SelfTest,
         RobotState::Idle,
+        RobotState::Provisioning,
         RobotState::Prepared,
         RobotState::Working,
         RobotState::Cleaning,
@@ -490,7 +519,7 @@ fn status_all_robot_states() {
     ];
     for state in states {
         let hal = MockStatusHal::new().with_state(state.clone());
-        assert_eq!(hal.state(), state);
+        assert_eq!(block_on(hal.state()), state);
     }
 }
 
@@ -501,41 +530,35 @@ fn status_all_robot_states() {
 #[test]
 fn config_get_returns_default() {
     let hal = MockConfigHal::new();
-    let cfg = hal.get_active_config();
-    assert_eq!(cfg.version, "1.0.0");
+    let cfg = block_on(hal.get_active_config());
     assert_eq!(cfg.liquids.len(), 1);
+    assert_eq!(cfg.capabilities.version, "1.0.0");
 }
 
 #[test]
 fn config_update_and_retrieve() {
     let mut hal = MockConfigHal::new();
-    let mut cfg = test_config();
-    cfg.version = String::from("2.0.0");
-    cfg.part_ml = 45.0;
-    hal.update_active_config(cfg).unwrap();
+    let mut cfg = test_admin_config();
+    cfg.max_total_parts = 20;
+    block_on(hal.update_active_config(cfg)).unwrap();
 
-    let retrieved = hal.get_active_config();
-    assert_eq!(retrieved.version, "2.0.0");
-    assert_eq!(retrieved.part_ml, 45.0);
+    let retrieved = block_on(hal.get_active_config());
+    assert_eq!(retrieved.max_total_parts, 20);
 }
 
 #[test]
 fn config_update_replaces_liquids() {
     let mut hal = MockConfigHal::new();
-    let mut cfg = test_config();
+    let mut cfg = test_admin_config();
     cfg.liquids.push(LiquidConfig {
         id: String::from("rum"),
         name: String::from("Rum"),
         position: 1,
-        calibration: LiquidCalibration {
-            ml_per_sec: 8.0,
-            prime_ms: 600,
-            viscosity_factor: 1.1,
-        },
+        calibration: LiquidCalibration { factor: 1.1 },
     });
-    hal.update_active_config(cfg).unwrap();
+    block_on(hal.update_active_config(cfg)).unwrap();
 
-    let retrieved = hal.get_active_config();
+    let retrieved = block_on(hal.get_active_config());
     assert_eq!(retrieved.liquids.len(), 2);
     assert_eq!(retrieved.liquids[1].id, "rum");
 }
@@ -544,7 +567,7 @@ fn config_update_replaces_liquids() {
 fn config_update_error() {
     let mut hal = MockConfigHal::new();
     hal.fail_next = Some(test_error());
-    let result = hal.update_active_config(test_config());
+    let result = block_on(hal.update_active_config(test_admin_config()));
     assert!(result.is_err());
 }
 
@@ -553,53 +576,43 @@ fn config_update_error() {
 // ============================================================================
 
 #[test]
-fn storage_load_empty_returns_error() {
+fn storage_backup_empty_returns_error() {
     let hal = MockStorageHal::new();
-    let result = hal.load_storage_config();
+    let result = block_on(hal.backup());
     assert!(result.is_err());
     let err = result.unwrap_err();
     assert_eq!(err.code, "NO_CONFIG");
 }
 
 #[test]
-fn storage_store_and_load() {
+fn storage_restore_and_backup() {
     let mut hal = MockStorageHal::new();
-    let cfg = test_config();
-    hal.store_storage_config(cfg.clone(), false).unwrap();
+    let cfg = test_admin_config();
+    block_on(hal.restore(cfg.clone())).unwrap();
 
-    let loaded = hal.load_storage_config().unwrap();
-    assert_eq!(loaded.version, cfg.version);
-    assert_eq!(loaded.liquids.len(), cfg.liquids.len());
+    let payload = block_on(hal.backup()).unwrap();
+    assert_eq!(payload.data.liquids.len(), cfg.liquids.len());
+    assert_eq!(payload.data.token, cfg.token);
 }
 
 #[test]
-fn storage_no_overwrite_fails_when_exists() {
+fn storage_restore_overwrites() {
     let mut hal = MockStorageHal::new();
-    hal.store_storage_config(test_config(), false).unwrap();
+    block_on(hal.restore(test_admin_config())).unwrap();
 
-    let result = hal.store_storage_config(test_config(), false);
-    assert!(result.is_err());
-    assert_eq!(result.unwrap_err().code, "EXISTS");
+    let mut cfg2 = test_admin_config();
+    cfg2.max_total_parts = 20;
+    block_on(hal.restore(cfg2)).unwrap();
+
+    let payload = block_on(hal.backup()).unwrap();
+    assert_eq!(payload.data.max_total_parts, 20);
 }
 
 #[test]
-fn storage_overwrite_succeeds() {
-    let mut hal = MockStorageHal::new();
-    hal.store_storage_config(test_config(), false).unwrap();
-
-    let mut cfg2 = test_config();
-    cfg2.version = String::from("2.0.0");
-    hal.store_storage_config(cfg2, true).unwrap();
-
-    let loaded = hal.load_storage_config().unwrap();
-    assert_eq!(loaded.version, "2.0.0");
-}
-
-#[test]
-fn storage_store_error_propagation() {
+fn storage_restore_error_propagation() {
     let mut hal = MockStorageHal::new();
     hal.fail_next = Some(test_error());
-    let result = hal.store_storage_config(test_config(), false);
+    let result = block_on(hal.restore(test_admin_config()));
     assert!(result.is_err());
     assert!(hal.stored.is_none());
 }
@@ -611,7 +624,7 @@ fn storage_store_error_propagation() {
 #[test]
 fn sensor_glass_absent() {
     let hal = MockSensorHal::new();
-    let state = hal.glass_state().unwrap();
+    let state = block_on(hal.glass_state()).unwrap();
     assert!(!state.present);
     assert!(state.glass_type.is_none());
 }
@@ -619,7 +632,7 @@ fn sensor_glass_absent() {
 #[test]
 fn sensor_glass_present() {
     let hal = MockSensorHal::new().with_glass(true);
-    let state = hal.glass_state().unwrap();
+    let state = block_on(hal.glass_state()).unwrap();
     assert!(state.present);
     assert!(state.confidence > 0.9);
 }
@@ -627,7 +640,7 @@ fn sensor_glass_present() {
 #[test]
 fn sensor_levels_empty() {
     let hal = MockSensorHal::new();
-    let levels = hal.level_state().unwrap();
+    let levels = block_on(hal.level_state()).unwrap();
     assert!(levels.is_empty());
 }
 
@@ -638,7 +651,7 @@ fn sensor_levels_binary() {
         id: String::from("vodka"),
         ok: true,
     }];
-    let levels = hal.level_state().unwrap();
+    let levels = block_on(hal.level_state()).unwrap();
     assert_eq!(levels.len(), 1);
     match &levels[0] {
         LevelState::Binary { id, ok } => {
@@ -656,7 +669,7 @@ fn sensor_levels_decimal() {
         id: String::from("rum"),
         remaining_ml: 250.0,
     }];
-    let levels = hal.level_state().unwrap();
+    let levels = block_on(hal.level_state()).unwrap();
     match &levels[0] {
         LevelState::Decimal { id, remaining_ml } => {
             assert_eq!(id, "rum");
@@ -672,8 +685,8 @@ fn sensor_error_propagation() {
         fail_next: Some(test_error()),
         ..MockSensorHal::new()
     };
-    assert!(hal.glass_state().is_err());
-    assert!(hal.level_state().is_err());
+    assert!(block_on(hal.glass_state()).is_err());
+    assert!(block_on(hal.level_state()).is_err());
 }
 
 // ============================================================================
@@ -683,19 +696,18 @@ fn sensor_error_propagation() {
 #[test]
 fn dispense_create_job() {
     let mut hal = MockDispenseHal::new();
-    let job_id = hal
-        .create_job(
-            String::from("client-1"),
-            vec![JobItem {
-                liquid_id: String::from("vodka"),
-                parts: 2,
-            }],
-            true,
-            false,
-            Duration::from_secs(30),
-        )
-        .unwrap();
-    assert_eq!(job_id, "job-1");
+    let created = block_on(hal.create_job(
+        String::from("id-1"),
+        String::from("Margarita"),
+        vec![JobItem {
+            liquid_id: String::from("vodka"),
+            parts: 2,
+        }],
+        false,
+    ))
+    .unwrap();
+    assert_eq!(created.job_id, "job-1");
+    assert_eq!(created.queue_position, 1);
 }
 
 #[test]
@@ -705,69 +717,51 @@ fn dispense_job_ids_increment() {
         liquid_id: String::from("vodka"),
         parts: 1,
     }];
-    let id1 = hal
-        .create_job(
-            String::from("c1"),
-            items.clone(),
-            false,
-            false,
-            Duration::from_secs(30),
-        )
-        .unwrap();
-    let id2 = hal
-        .create_job(
-            String::from("c2"),
-            items,
-            false,
-            false,
-            Duration::from_secs(30),
-        )
-        .unwrap();
-    assert_eq!(id1, "job-1");
-    assert_eq!(id2, "job-2");
+    let c1 = block_on(hal.create_job(
+        String::from("id-1"),
+        String::from("c1"),
+        items.clone(),
+        false,
+    ))
+    .unwrap();
+    let c2 =
+        block_on(hal.create_job(String::from("id-2"), String::from("c2"), items, false)).unwrap();
+    assert_eq!(c1.job_id, "job-1");
+    assert_eq!(c2.job_id, "job-2");
 }
 
 #[test]
 fn dispense_list_jobs_empty() {
     let hal = MockDispenseHal::new();
-    assert!(hal.list_jobs().is_empty());
+    assert!(block_on(hal.list_jobs()).is_empty());
 }
 
 #[test]
 fn dispense_list_jobs_after_create() {
     let mut hal = MockDispenseHal::new();
-    hal.create_job(
-        String::from("c1"),
-        vec![],
-        false,
-        false,
-        Duration::from_secs(30),
-    )
-    .unwrap();
-    assert_eq!(hal.list_jobs().len(), 1);
+    block_on(hal.create_job(String::from("id-1"), String::from("c1"), vec![], false)).unwrap();
+    assert_eq!(block_on(hal.list_jobs()).len(), 1);
 }
 
 #[test]
 fn dispense_job_status() {
     let mut hal = MockDispenseHal::new();
-    let job_id = hal
-        .create_job(
-            String::from("c1"),
-            vec![],
-            false,
-            false,
-            Duration::from_secs(30),
-        )
-        .unwrap();
-    let status = hal.job_status(&job_id).unwrap();
-    assert_eq!(status.client_job_id, "c1");
+    let created = block_on(hal.create_job(
+        String::from("id-1"),
+        String::from("Daiquiri"),
+        vec![],
+        false,
+    ))
+    .unwrap();
+    let status = block_on(hal.job_status(&created.job_id)).unwrap();
+    assert_eq!(status.name, "Daiquiri");
     assert_eq!(status.progress_pct, 0);
 }
 
 #[test]
 fn dispense_unknown_job_returns_error() {
     let hal = MockDispenseHal::new();
-    let result = hal.job_status("nonexistent");
+    let result = block_on(hal.job_status("nonexistent"));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code, "NOT_FOUND");
 }
@@ -775,18 +769,11 @@ fn dispense_unknown_job_returns_error() {
 #[test]
 fn dispense_cancel_job() {
     let mut hal = MockDispenseHal::new();
-    let job_id = hal
-        .create_job(
-            String::from("c1"),
-            vec![],
-            false,
-            false,
-            Duration::from_secs(30),
-        )
-        .unwrap();
-    hal.cancel_job(&job_id).unwrap();
+    let created =
+        block_on(hal.create_job(String::from("id-1"), String::from("c1"), vec![], false)).unwrap();
+    block_on(hal.cancel_job(&created.job_id)).unwrap();
 
-    let status = hal.job_status(&job_id).unwrap();
+    let status = block_on(hal.job_status(&created.job_id)).unwrap();
     let state_json = serde_json::to_string(&status.state).unwrap();
     assert_eq!(state_json, "\"cancelled\"");
 }
@@ -794,7 +781,7 @@ fn dispense_cancel_job() {
 #[test]
 fn dispense_cancel_unknown_job() {
     let mut hal = MockDispenseHal::new();
-    let result = hal.cancel_job("nonexistent");
+    let result = block_on(hal.cancel_job("nonexistent"));
     assert!(result.is_err());
 }
 
@@ -802,13 +789,7 @@ fn dispense_cancel_unknown_job() {
 fn dispense_create_job_error() {
     let mut hal = MockDispenseHal::new();
     hal.fail_next = Some(test_error());
-    let result = hal.create_job(
-        String::from("c1"),
-        vec![],
-        false,
-        false,
-        Duration::from_secs(30),
-    );
+    let result = block_on(hal.create_job(String::from("id-1"), String::from("c1"), vec![], false));
     assert!(result.is_err());
     assert!(hal.jobs.is_empty());
 }
@@ -817,19 +798,13 @@ fn dispense_create_job_error() {
 fn dispense_multiple_jobs_listed() {
     let mut hal = MockDispenseHal::new();
     for i in 0..3 {
-        hal.create_job(
-            format!("client-{}", i),
-            vec![],
-            false,
-            false,
-            Duration::from_secs(30),
-        )
-        .unwrap();
+        block_on(hal.create_job(format!("id-{}", i), format!("client-{}", i), vec![], false))
+            .unwrap();
     }
-    let jobs = hal.list_jobs();
+    let jobs = block_on(hal.list_jobs());
     assert_eq!(jobs.len(), 3);
-    assert_eq!(jobs[0].client_job_id, "client-0");
-    assert_eq!(jobs[2].client_job_id, "client-2");
+    assert_eq!(jobs[0].name, "client-0");
+    assert_eq!(jobs[2].name, "client-2");
 }
 
 // ============================================================================
@@ -840,23 +815,23 @@ fn dispense_multiple_jobs_listed() {
 fn cleaning_start() {
     let mut hal = MockCleaningHal::new();
     assert!(!hal.cleaning);
-    hal.start_cleaning().unwrap();
+    block_on(hal.start_cleaning()).unwrap();
     assert!(hal.cleaning);
 }
 
 #[test]
 fn cleaning_stop() {
     let mut hal = MockCleaningHal::new();
-    hal.start_cleaning().unwrap();
-    hal.stop_cleaning().unwrap();
+    block_on(hal.start_cleaning()).unwrap();
+    block_on(hal.stop_cleaning()).unwrap();
     assert!(!hal.cleaning);
 }
 
 #[test]
 fn cleaning_double_start_fails() {
     let mut hal = MockCleaningHal::new();
-    hal.start_cleaning().unwrap();
-    let result = hal.start_cleaning();
+    block_on(hal.start_cleaning()).unwrap();
+    let result = block_on(hal.start_cleaning());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().code, "ALREADY_CLEANING");
 }
@@ -864,7 +839,7 @@ fn cleaning_double_start_fails() {
 #[test]
 fn cleaning_stop_when_not_cleaning() {
     let mut hal = MockCleaningHal::new();
-    hal.stop_cleaning().unwrap();
+    block_on(hal.stop_cleaning()).unwrap();
     assert!(!hal.cleaning);
 }
 
@@ -872,7 +847,7 @@ fn cleaning_stop_when_not_cleaning() {
 fn cleaning_error_propagation() {
     let mut hal = MockCleaningHal::new();
     hal.fail_next = Some(test_error());
-    let result = hal.start_cleaning();
+    let result = block_on(hal.start_cleaning());
     assert!(result.is_err());
     assert!(!hal.cleaning);
 }
@@ -880,9 +855,9 @@ fn cleaning_error_propagation() {
 #[test]
 fn cleaning_restart_after_stop() {
     let mut hal = MockCleaningHal::new();
-    hal.start_cleaning().unwrap();
-    hal.stop_cleaning().unwrap();
-    hal.start_cleaning().unwrap();
+    block_on(hal.start_cleaning()).unwrap();
+    block_on(hal.stop_cleaning()).unwrap();
+    block_on(hal.start_cleaning()).unwrap();
     assert!(hal.cleaning);
 }
 
@@ -907,9 +882,9 @@ fn robot_state_deserializes_from_snake_case() {
 fn robot_state_all_variants_roundtrip() {
     let variants = vec![
         (RobotState::Off, "\"off\""),
-        (RobotState::Booting, "\"booting\""),
         (RobotState::SelfTest, "\"self_test\""),
         (RobotState::Idle, "\"idle\""),
+        (RobotState::Provisioning, "\"provisioning\""),
         (RobotState::Prepared, "\"prepared\""),
         (RobotState::Working, "\"working\""),
         (RobotState::Cleaning, "\"cleaning\""),
@@ -925,15 +900,37 @@ fn robot_state_all_variants_roundtrip() {
 }
 
 #[test]
+fn admin_config_json_roundtrip() {
+    let cfg = test_admin_config();
+    let json = serde_json::to_string(&cfg).unwrap();
+    let parsed: AdminConfig = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.token, cfg.token);
+    assert_eq!(parsed.liquids.len(), cfg.liquids.len());
+    assert_eq!(parsed.max_total_parts, cfg.max_total_parts);
+}
+
+#[test]
 fn robot_config_json_roundtrip() {
     let cfg = test_config();
     let json = serde_json::to_string(&cfg).unwrap();
     let parsed: RobotConfig = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.version, cfg.version);
     assert_eq!(parsed.liquids.len(), cfg.liquids.len());
-    assert_eq!(parsed.part_ml, cfg.part_ml);
     assert_eq!(parsed.max_total_parts, cfg.max_total_parts);
-    assert_eq!(parsed.max_channels_per_job, cfg.max_channels_per_job);
+    assert_eq!(parsed.capabilities.version, "1.0.0");
+}
+
+#[test]
+fn backup_payload_json_roundtrip() {
+    let payload = BackupPayload {
+        data: test_admin_config(),
+        checksum: String::from("deadbeef"),
+        backed_up_at: String::from("2026-01-01T00:00:00Z"),
+    };
+    let json = serde_json::to_string(&payload).unwrap();
+    let parsed: BackupPayload = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.checksum, "deadbeef");
+    assert_eq!(parsed.backed_up_at, "2026-01-01T00:00:00Z");
+    assert_eq!(parsed.data.token, "secret");
 }
 
 #[test]
@@ -1034,28 +1031,27 @@ fn job_item_json_roundtrip() {
 
 #[test]
 fn liquid_calibration_json_roundtrip() {
-    let cal = LiquidCalibration {
-        ml_per_sec: 12.5,
-        prime_ms: 750,
-        viscosity_factor: 1.2,
-    };
+    let cal = LiquidCalibration { factor: 1.2 };
     let json = serde_json::to_string(&cal).unwrap();
     let parsed: LiquidCalibration = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed.ml_per_sec, 12.5);
-    assert_eq!(parsed.prime_ms, 750);
+    assert_eq!(parsed.factor, 1.2);
 }
 
 #[test]
 fn capabilities_json_roundtrip() {
     let caps = Capabilities {
+        version: String::from("1.0.0"),
         level_reporting: LevelReporting::Decimal,
         glass_typing: true,
         simultaneous_channels: 4,
+        max_queue_depth: 5,
     };
     let json = serde_json::to_string(&caps).unwrap();
     let parsed: Capabilities = serde_json::from_str(&json).unwrap();
     assert!(parsed.glass_typing);
     assert_eq!(parsed.simultaneous_channels, 4);
+    assert_eq!(parsed.version, "1.0.0");
+    assert_eq!(parsed.max_queue_depth, 5);
 }
 
 #[test]

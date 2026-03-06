@@ -29,6 +29,19 @@ fn tokens_equal(a: &str, b: &str) -> bool {
     diff == 0
 }
 
+/// Returns true if the given path is an admin endpoint that should remain
+/// accessible during the `Provisioning` state.
+fn is_admin_route(method: &str, path: &str) -> bool {
+    matches!(
+        (method, path),
+        ("GET", "/v1/config")
+            | ("PATCH", "/v1/config")
+            | ("GET", "/v1/config/backup")
+            | ("POST", "/v1/config/restore")
+            | ("GET", "/v1/status")
+    )
+}
+
 /// Composes all HAL trait implementations into a single struct.
 ///
 /// Each field is a concrete owned type bounded by the corresponding HAL
@@ -99,6 +112,21 @@ impl<
             return;
         }
 
+        // Provisioning gate: reject non-admin routes when state is Provisioning.
+        let state = self.hal.status.state().await;
+        if state == RobotState::Provisioning && !is_admin_route(method, path) {
+            http::write_json(
+                socket,
+                503,
+                &serde_json::json!({
+                    "error": "Robot is in provisioning state. Restore a configuration first."
+                }),
+            )
+            .await
+            .ok();
+            return;
+        }
+
         match (method, path) {
             // ----- status -----
             ("GET", "/v1/status") => {
@@ -115,25 +143,35 @@ impl<
             ("POST", "/v1/control/reset") => {
                 handlers::control::handle_reset(&mut self.hal.control, socket).await;
             }
-            ("POST", "/v1/control/reload-config") => {
-                handlers::control::handle_reload_config(&mut self.hal.control, socket).await;
-            }
 
             // ----- config -----
             ("GET", "/v1/config") => {
                 handlers::config::handle_config_get(&self.hal.config, socket).await;
             }
             ("PATCH", "/v1/config") => {
-                handlers::config::handle_config_patch(&mut self.hal.config, &request, socket).await;
+                handlers::config::handle_config_patch(
+                    &mut self.hal.config,
+                    &mut self.hal.storage,
+                    &mut self.hal.dispense,
+                    &request,
+                    socket,
+                )
+                .await;
             }
 
-            // ----- storage -----
-            ("GET", "/v1/storage/config") => {
-                handlers::config::handle_storage_read(&self.hal.storage, socket).await;
+            // ----- backup / restore -----
+            ("GET", "/v1/config/backup") => {
+                handlers::config::handle_backup(&self.hal.storage, socket).await;
             }
-            ("POST", "/v1/storage/config") => {
-                handlers::config::handle_storage_write(&mut self.hal.storage, &request, socket)
-                    .await;
+            ("POST", "/v1/config/restore") => {
+                handlers::config::handle_restore(
+                    &mut self.hal.config,
+                    &mut self.hal.storage,
+                    &mut self.hal.dispense,
+                    &request,
+                    socket,
+                )
+                .await;
             }
 
             // ----- sensors -----

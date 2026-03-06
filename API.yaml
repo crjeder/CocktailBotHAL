@@ -19,6 +19,7 @@ components:
         - off
         - self_test
         - idle
+        - provisioning
         - prepared
         - working
         - cleaning
@@ -58,7 +59,6 @@ components:
             for weight-based dispensing, seconds/ml for time-based). A value of
             1.0 delivers the computed volume without adjustment.
 
-
     LiquidConfig:
       type: object
       properties:
@@ -74,6 +74,9 @@ components:
     Capabilities:
       type: object
       properties:
+        version:
+          type: string
+          description: Firmware version string.
         level_reporting:
           type: string
           enum: [binary, decimal]
@@ -85,10 +88,31 @@ components:
           type: integer
           description: Maximum number of jobs (running + queued) accepted simultaneously.
 
+    AdminConfig:
+      type: object
+      description: Admin-owned configuration that is persisted to flash.
+      properties:
+        token:
+          type: string
+          description: Bearer token for API authentication. Empty string falls back to compile-time default.
+        liquids:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiquidConfig'
+        glass_types:
+          type: array
+          description: Available glass sizes; maps size names to target volumes.
+          items:
+            $ref: '#/components/schemas/GlassType'
+        max_total_parts:
+          type: integer
+          description: Maximum total parts accepted in a single job (safety limit).
+
     Config:
       type: object
+      description: Merged API-facing configuration (admin-owned fields + hardware capabilities).
       properties:
-        version:
+        token:
           type: string
         liquids:
           type: array
@@ -105,15 +129,18 @@ components:
         capabilities:
           $ref: '#/components/schemas/Capabilities'
 
-    ConfigStoragePayload:
+    BackupPayload:
       type: object
+      description: Backup of the persisted AdminConfig with integrity checksum.
       properties:
         data:
-          $ref: '#/components/schemas/Config'
-        valid:
-          type: boolean
+          $ref: '#/components/schemas/AdminConfig'
         checksum:
           type: string
+          description: CRC32 hex of the JSON-serialised AdminConfig.
+        backed_up_at:
+          type: string
+          description: ISO 8601 UTC timestamp of when the backup was created.
 
     GlassSensor:
       type: object
@@ -260,15 +287,9 @@ paths:
       responses:
         '200': { description: OK }
 
-  /control/reload-config:
-    post:
-      summary: Reload configuration from storage into active memory
-      responses:
-        '200': { description: Reloaded }
-
   /config:
     get:
-      summary: Get active (RAM) configuration
+      summary: Get active configuration (merged AdminConfig + Capabilities)
       responses:
         '200':
           description: Active config
@@ -278,28 +299,50 @@ paths:
                 $ref: '#/components/schemas/Config'
 
     patch:
-      summary: Update active configuration
+      summary: Update admin configuration
+      description: |
+        Replaces the full AdminConfig. Runs pre-flight (cancels all queued jobs,
+        waits for running job to finish) before applying. Auto-persists to flash.
+        WARNING: queued jobs will be cancelled silently.
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Config'
-      responses:
-        '200': { description: Updated }
-
-  /storage/config:
-    get:
-      summary: Read configuration from non-volatile storage
+              $ref: '#/components/schemas/AdminConfig'
       responses:
         '200':
-          description: Stored config
+          description: Updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigStoragePayload'
+                type: object
+                properties:
+                  status:
+                    type: string
+                  cancelled_job_ids:
+                    type: array
+                    items:
+                      type: string
 
+  /config/backup:
+    get:
+      summary: Download a backup of the persisted AdminConfig
+      responses:
+        '200':
+          description: Backup payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupPayload'
+
+  /config/restore:
     post:
-      summary: Write configuration to non-volatile storage
+      summary: Restore AdminConfig from a backup
+      description: |
+        Verifies the CRC32 checksum, runs pre-flight (cancels all queued jobs,
+        waits for running job to finish), writes to flash and activates in RAM.
+        Exits Provisioning state on success.
+        WARNING: queued jobs will be cancelled silently.
       requestBody:
         content:
           application/json:
@@ -307,21 +350,37 @@ paths:
               type: object
               properties:
                 data:
-                  $ref: '#/components/schemas/Config'
-                overwrite:
-                  type: boolean
+                  $ref: '#/components/schemas/AdminConfig'
+                checksum:
+                  type: string
+                  description: CRC32 hex checksum of the JSON-serialised AdminConfig.
       responses:
         '200':
-          description: Stored
+          description: Restored
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  success: { type: boolean }
-                  written_at: { type: string, format: date-time }
-                  checksum: { type: string }
-                  requires_reboot: { type: boolean }
+                  status:
+                    type: string
+                  cancelled_job_ids:
+                    type: array
+                    items:
+                      type: string
+        '422':
+          description: Checksum mismatch
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                  expected:
+                    type: string
+                  received:
+                    type: string
 
   /sensors/glass:
     get:

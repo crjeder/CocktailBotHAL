@@ -5,7 +5,7 @@
 
 use alloc::string::String;
 
-use crate::hal::{ErrorInfo, RobotConfig, StorageHal};
+use crate::hal::{AdminConfig, BackupPayload, ErrorInfo, StorageHal};
 
 /// Stub implementation of [`StorageHal`] for ESP32.
 pub struct Esp32Storage;
@@ -28,17 +28,13 @@ fn not_implemented() -> ErrorInfo {
 }
 
 impl StorageHal for Esp32Storage {
-    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
-        // TODO: wire to hardware — read RobotConfig from NVS flash
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo> {
+        // TODO: wire to hardware — read AdminConfig from NVS flash
         Err(not_implemented())
     }
 
-    async fn store_storage_config(
-        &mut self,
-        _cfg: RobotConfig,
-        _overwrite: bool,
-    ) -> Result<(), ErrorInfo> {
-        // TODO: wire to hardware — write RobotConfig to NVS flash
+    async fn restore(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {
+        // TODO: wire to hardware — write AdminConfig to NVS flash
         Err(not_implemented())
     }
 }

@@ -25,9 +25,10 @@ use alloc::vec::Vec;
 #[cfg(not(test))]
 use embassy_executor::{Executor, Spawner};
 use hal::{
-    Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState,
-    GlassType, JobCreated, JobItem, JobStatus, LevelReporting, LevelState, LiquidCalibration,
-    LiquidConfig, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    AdminConfig, BackupPayload, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal,
+    ErrorInfo, GlassSensorState, GlassType, JobCreated, JobItem, JobStatus, LevelReporting,
+    LevelState, LiquidCalibration, LiquidConfig, RobotConfig, RobotState, SensorHal, StatusHal,
+    StorageHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
@@ -53,9 +54,6 @@ impl ControlHal for StubControlHal {
     async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
-    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
-        todo!()
-    }
 }
 
 struct StubStatusHal;
@@ -74,7 +72,6 @@ struct StubConfigHal;
 impl ConfigHal for StubConfigHal {
     async fn get_active_config(&self) -> RobotConfig {
         RobotConfig {
-            version: String::from("0.4.0"),
             liquids: vec![LiquidConfig {
                 id: String::from("water"),
                 name: String::from("Water"),
@@ -97,6 +94,7 @@ impl ConfigHal for StubConfigHal {
             ],
             max_total_parts: 10,
             capabilities: Capabilities {
+                version: String::from("0.5.0"),
                 level_reporting: LevelReporting::Binary,
                 glass_typing: false,
                 simultaneous_channels: 1,
@@ -105,7 +103,7 @@ impl ConfigHal for StubConfigHal {
             token: String::new(),
         }
     }
-    async fn update_active_config(&mut self, _cfg: RobotConfig) -> Result<(), ErrorInfo> {
+    async fn update_active_config(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {
         todo!()
     }
 }
@@ -113,14 +111,10 @@ impl ConfigHal for StubConfigHal {
 struct StubStorageHal;
 
 impl StorageHal for StubStorageHal {
-    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo> {
         todo!()
     }
-    async fn store_storage_config(
-        &mut self,
-        _cfg: RobotConfig,
-        _overwrite: bool,
-    ) -> Result<(), ErrorInfo> {
+    async fn restore(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {
         todo!()
     }
 }

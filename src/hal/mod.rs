@@ -10,6 +10,7 @@ pub enum RobotState {
     Off,
     SelfTest,
     Idle,
+    Provisioning,
     Prepared,
     Working,
     Cleaning,
@@ -56,6 +57,7 @@ pub struct LiquidConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capabilities {
+    pub version: String,
     pub level_reporting: LevelReporting,
     pub glass_typing: bool,
     pub simultaneous_channels: u8,
@@ -70,20 +72,40 @@ pub enum LevelReporting {
     Decimal,
 }
 
+/// Admin-owned configuration that is persisted to flash.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RobotConfig {
-    pub version: String,
+pub struct AdminConfig {
+    /// Bearer token required to authenticate API requests.
+    /// An empty string causes the server to fall back to the compile-time default.
+    #[serde(default)]
+    pub token: String,
     pub liquids: Vec<LiquidConfig>,
     /// Available glass sizes. The server resolves the target volume for a
     /// dispensing job by matching the requested size against this list.
     pub glass_types: Vec<GlassType>,
     /// Maximum total parts accepted in a single job (safety limit).
     pub max_total_parts: u16,
-    pub capabilities: Capabilities,
-    /// Bearer token required to authenticate API requests.
-    /// An empty string causes the server to fall back to the compile-time default.
-    #[serde(default)]
+}
+
+/// Merged API-facing configuration: admin-owned fields + hardware capabilities.
+/// Returned by `GET /config`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RobotConfig {
     pub token: String,
+    pub liquids: Vec<LiquidConfig>,
+    pub glass_types: Vec<GlassType>,
+    pub max_total_parts: u16,
+    pub capabilities: Capabilities,
+}
+
+/// Payload returned by `StorageHal::backup`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupPayload {
+    pub data: AdminConfig,
+    /// CRC32 hex of the JSON-serialised `AdminConfig`.
+    pub checksum: String,
+    /// ISO 8601 UTC timestamp of when the backup was created.
+    pub backed_up_at: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -149,12 +171,11 @@ pub struct JobStatus {
 // TRAIT DEFINITIONS
 // ============================================================================
 
-/// Power / Reset / Reload Config
+/// Power / Reset
 pub trait ControlHal {
     async fn power(&mut self, on: bool) -> Result<(), ErrorInfo>;
     async fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo>;
     async fn reset_errors(&mut self) -> Result<(), ErrorInfo>;
-    async fn reload_config(&mut self) -> Result<(), ErrorInfo>;
 }
 
 /// Status information
@@ -166,17 +187,13 @@ pub trait StatusHal {
 /// Active config (RAM)
 pub trait ConfigHal {
     async fn get_active_config(&self) -> RobotConfig;
-    async fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo>;
+    async fn update_active_config(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo>;
 }
 
-/// Persistent config (Flash)
+/// Persistent config (Flash) — backup/restore semantics
 pub trait StorageHal {
-    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo>;
-    async fn store_storage_config(
-        &mut self,
-        cfg: RobotConfig,
-        overwrite: bool,
-    ) -> Result<(), ErrorInfo>;
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo>;
+    async fn restore(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo>;
 }
 
 /// Sensor access
