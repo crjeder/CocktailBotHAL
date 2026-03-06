@@ -220,3 +220,37 @@ fn status_reason(code: u16) -> &'static str {
         _ => "OK",
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::string::ToString;
+
+    #[test]
+    fn basic_auth_password_valid() {
+        // "admin:changeme" base64 → "YWRtaW46Y2hhbmdlbWU="
+        let header = "Basic YWRtaW46Y2hhbmdlbWU=";
+        assert_eq!(basic_auth_password(header).as_deref(), Some("changeme"));
+    }
+
+    #[test]
+    fn basic_auth_password_rejects_bearer() {
+        // A Bearer token must not parse as Basic Auth.
+        let header = "Bearer some-token";
+        assert_eq!(basic_auth_password(header), None);
+    }
+
+    #[test]
+    fn basic_auth_password_empty_password() {
+        // "admin:" → password is empty string (valid Basic Auth, empty password)
+        // base64("admin:") = "YWRtaW46"
+        let header = "Basic YWRtaW46";
+        assert_eq!(basic_auth_password(header).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn basic_auth_password_invalid_base64() {
+        let header = "Basic !!!not-base64!!!";
+        assert_eq!(basic_auth_password(header), None);
+    }
+}

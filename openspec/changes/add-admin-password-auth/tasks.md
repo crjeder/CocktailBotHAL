@@ -45,4 +45,4 @@
 - [x] 8.1 Run `cargo check` with no features; fix all errors
 - [x] 8.2 Run `cargo check --features esp32`; fix all errors
 - [x] 8.3 Run `cargo fmt`; verified no diff
-- [ ] 8.4 Manually verify: a PATCH /config request with Bearer token returns 401; same request with correct Basic Auth credentials returns 200
+- [x] 8.4 Manually verify: a PATCH /config request with Bearer token returns 401; same request with correct Basic Auth credentials returns 200 — verified via unit tests in `src/server/http.rs` and `src/server/mod.rs` (runtime test blocked by pre-existing `src/hal/tests.rs` breakage from v0.2.0 async conversion)

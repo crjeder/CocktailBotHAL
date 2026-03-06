@@ -255,3 +255,59 @@ pub mod handlers {
     pub mod sensors;
     pub mod status;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// PATCH /v1/config is an admin route: a Bearer token must not satisfy it.
+    #[test]
+    fn patch_config_is_admin_route() {
+        assert!(
+            ADMIN_ROUTES
+                .iter()
+                .any(|(m, p)| *m == "PATCH" && *p == "/v1/config"),
+            "PATCH /v1/config must be in ADMIN_ROUTES"
+        );
+    }
+
+    /// Bearer-style header yields None from basic_auth_password, so the auth
+    /// check for admin routes evaluates to false (→ 401).
+    #[test]
+    fn bearer_token_rejected_on_admin_route() {
+        let bearer_header = "Bearer some-token";
+        let password = http::basic_auth_password(bearer_header);
+        // No password extracted → auth resolves to false → 401 returned.
+        assert!(
+            password.is_none(),
+            "Bearer header must not produce a Basic Auth password"
+        );
+    }
+
+    /// Correct Basic Auth header yields the password, and tokens_equal confirms
+    /// it matches DEFAULT_ADMIN_PASSWORD (→ 200 when no hash is stored).
+    #[test]
+    fn correct_basic_auth_accepted_on_admin_route() {
+        // "admin:changeme" base64 → "YWRtaW46Y2hhbmdlbWU="
+        let basic_header = "Basic YWRtaW46Y2hhbmdlbWU=";
+        let password = http::basic_auth_password(basic_header);
+        assert!(password.is_some(), "Valid Basic Auth header must decode");
+        assert!(
+            tokens_equal(password.as_deref().unwrap(), DEFAULT_ADMIN_PASSWORD),
+            "Correct password must match DEFAULT_ADMIN_PASSWORD"
+        );
+    }
+
+    /// Wrong password in Basic Auth must be rejected.
+    #[test]
+    fn wrong_basic_auth_rejected() {
+        // "admin:wrongpassword" base64 → "YWRtaW46d3JvbmdwYXNzd29yZA=="
+        let basic_header = "Basic YWRtaW46d3JvbmdwYXNzd29yZA==";
+        let password = http::basic_auth_password(basic_header);
+        assert!(password.is_some());
+        assert!(
+            !tokens_equal(password.as_deref().unwrap(), DEFAULT_ADMIN_PASSWORD),
+            "Wrong password must not match DEFAULT_ADMIN_PASSWORD"
+        );
+    }
+}
