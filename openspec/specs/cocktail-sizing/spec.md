@@ -1,17 +1,23 @@
 ## ADDED Requirements
 
 ### Requirement: Glass type configuration
-`RobotConfig` SHALL include a `glass_type: GlassType` field where `GlassType` is an
-enum of supported vessel sizes (e.g. `Small`, `Medium`, `Large`). The active glass
-type determines the total cocktail volume target used during job execution.
+`AdminConfig` SHALL include a `glass_types: Vec<GlassType>` field where each
+`GlassType` has an `id: String` (e.g. `"short"`, `"medium"`, `"long"`) and a
+`volume_ml: f32`. The active glass types determine the available cocktail size
+targets used during job execution. `glass_types` is admin-configurable and
+persisted to non-volatile storage as part of `AdminConfig`.
 
-#### Scenario: Glass type is present in active config
-- **WHEN** `ConfigHal::get_active_config()` is called
-- **THEN** the returned `RobotConfig` includes a `glass_type` field with a valid `GlassType` variant
+#### Scenario: Glass types are present in active config
+- **WHEN** `GET /config` is called
+- **THEN** the response includes a `glass_types` array with at least one entry
 
-#### Scenario: Glass type can be updated
-- **WHEN** `ConfigHal::set_active_config(config)` is called with a different `glass_type`
-- **THEN** subsequent calls to `get_active_config()` reflect the new `glass_type`
+#### Scenario: Glass types can be updated via PATCH
+- **WHEN** `PATCH /config` is called with an updated `glass_types` array
+- **THEN** subsequent `GET /config` responses reflect the new glass types
+
+#### Scenario: Glass types survive power cycle
+- **WHEN** `PATCH /config` is called, then the robot is power-cycled
+- **THEN** `GET /config` after reboot returns the same `glass_types`
 
 ### Requirement: Job size field
 `JobStatus` SHALL include a `size_ml: u16` field indicating the total target volume
