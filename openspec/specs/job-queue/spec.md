@@ -2,23 +2,27 @@
 
 ### Requirement: job-create signature
 `DispenseHal::create_job` SHALL accept exactly four parameters:
-1. `name: &str` — human-readable, non-unique label supplied by the client
-2. `recipe: &Recipe` — the cocktail recipe to dispense (from `generic_cocktail`)
-3. `size_ml: u16` — total target volume in millilitres, computed from glass type at call site
-4. `channel_map: &[u8]` — mapping from recipe ingredient index to hardware channel index
+1. `job_id: String` — server-generated unique identifier (see job_id generation requirement)
+2. `name: String` — human-readable, non-unique label supplied by the client
+3. `items: Vec<DispenseItem>` — pre-computed per-ingredient dispenser volumes;
+   each `DispenseItem` has `liquid_id: String` and `amount: f32` in the operator's
+   abstract volume unit
+4. `parallel: bool` — whether channels may dispense simultaneously
 
-The signature SHALL NOT include `require_glass` or `timeout` parameters. Glass
-detection is a pre-condition enforced by the server layer before calling into the HAL.
-Timeouts are managed by the executor / watchdog layer, not the HAL method signature.
+The signature SHALL NOT include `require_glass`, `timeout`, `recipe`, `size_ml`,
+or `channel_map` parameters. Glass detection is a pre-condition enforced by the
+server layer before calling the HAL. Volume normalization is performed by the
+server and passed in as pre-computed `DispenseItem` values.
 
 #### Scenario: create_job accepts four arguments
-- **WHEN** the server layer calls `create_job(name, recipe, size_ml, channel_map)`
+- **WHEN** the server layer calls
+  `create_job(job_id, name, items: Vec<DispenseItem>, parallel)`
 - **THEN** the HAL accepts the call without additional parameters
 
-#### Scenario: require_glass is not a HAL parameter
-- **GIVEN** the server layer has already verified glass presence via `SensorHal`
-- **WHEN** `create_job` is invoked
-- **THEN** no `require_glass` flag is passed; glass enforcement is the caller's responsibility
+#### Scenario: DispenseItem carries pre-computed volume
+- **GIVEN** a recipe `{vodka: 2 parts, lime: 1 part}` for a glass of `volume = 90`
+- **WHEN** the server builds the `DispenseItem` list
+- **THEN** `items` contains `[{liquid_id: "vodka", amount: 60.0}, {liquid_id: "lime", amount: 30.0}]`
 
 ### Requirement: JobCreated return type
 `DispenseHal::create_job` SHALL return `Result<JobCreated, ErrorInfo>` where

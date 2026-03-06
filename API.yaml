@@ -51,9 +51,12 @@ components:
         id:
           type: string
           description: Size name, e.g. "short", "medium", "long".
-        volume_ml:
+        volume:
           type: number
-          description: Target fill volume in milliliters.
+          description: |
+            Abstract dispenser volume in operator-defined units (ml, cl, oz, etc.).
+            Must be consistent with all other `volume` values and all
+            `LiquidCalibration.factor` values within a single robot.
 
     LiquidCalibration:
       type: object
@@ -110,9 +113,6 @@ components:
           description: Available glass sizes; maps size names to target volumes.
           items:
             $ref: '#/components/schemas/GlassType'
-        max_total_parts:
-          type: integer
-          description: Maximum total parts accepted in a single job (safety limit).
         token:
           type: string
           description: Bearer token for non-admin API access. Default is "changeme".
@@ -138,8 +138,6 @@ components:
           description: Available glass sizes.
           items:
             $ref: '#/components/schemas/GlassType'
-        max_total_parts:
-          type: integer
         capabilities:
           $ref: '#/components/schemas/Capabilities'
         token:
@@ -543,7 +541,10 @@ paths:
         ```
 
         `job_update` — emitted when a dispensing job is created,
-        progresses, completes, or is cancelled.
+        progresses, completes, or is cancelled.  Also emitted as a
+        **terminal event** when a job disappears from the job list
+        (e.g. the HAL retires it after completion); the payload carries
+        the last-known state and progress at the time of departure.
         ```json
         {"job_id": "abc", "name": "xyz",
          "state": "running", "progress_pct": 45}

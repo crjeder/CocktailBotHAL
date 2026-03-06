@@ -222,8 +222,14 @@ impl<
 
             // ----- dispense (collection) -----
             ("POST", "/v1/dispense/jobs") => {
-                handlers::dispense::handle_create_job(&mut self.hal.dispense, &request, socket)
-                    .await;
+                let config = self.hal.config.get_active_config().await;
+                handlers::dispense::handle_create_job(
+                    &mut self.hal.dispense,
+                    &config,
+                    &request,
+                    socket,
+                )
+                .await;
             }
             ("GET", "/v1/dispense/jobs") => {
                 handlers::dispense::handle_list_jobs(&self.hal.dispense, socket).await;

@@ -1,5 +1,11 @@
 # TODO — CocktailBotHAL
 
+## Dispense: Glass Presence Check
+
+Before dispatching a job to `DispenseHal::create_job`, the handler should verify
+that a glass is present (`SensorHal::glass_state().present == true`). Currently
+the check is skipped. Requires passing `SensorHal` (or a pre-fetched
+`GlassSensorState`) into `handle_create_job`.
 
 
 ---
@@ -47,55 +53,42 @@ The following items have been implemented and are no longer open:
 - **API.yaml schema gaps** — `GlassType` added; `LiquidCalibration` collapsed to
   `factor: f32`; `Config` flattened and aligned; `JobCreateRequest` gets required
   `size` field; `RobotState::Booting` removed. All Rust types and API schema now match.
+- **Test HAL (mock infrastructure)** — `src/hal/mock.rs` provides `Mock*Hal` structs
+  for all 7 HAL traits plus `MockWrite` and `MockPasswordHasher`. `test-case = "3.2"`
+  and `embedded-hal-mock = "0.7.2"` active as dev-dependencies. Handler integration
+  tests added to all 6 handler modules. 106 tests pass (`cargo test`).
+- **Job queue and SSE wiring** — `JobCreated { job_id, queue_position }` return type
+  for `DispenseHal::create_job`; `max_queue_depth` in `Capabilities`; job_id generation
+  in `handle_create_job`; HTTP 503 on `QUEUE_FULL`; `SseServer` spawned as embassy task
+  in `main.rs` (polls state/jobs at 500 ms, emits typed events over TCP).
+- **Admin password authentication** — `PasswordHasher` trait with `hash`/`verify`;
+  `admin_password` field in `RobotConfig`; Basic Auth validated for all admin routes
+  (`PATCH /config`, power/cleaning/reset/reload-config); constant-time compare;
+  `Esp32PasswordHasher` using `pbkdf2` + `sha2` (ESP32 feature); `StubPasswordHasher`
+  in `main.rs`; `basicAuth` security scheme in `API.yaml`.
+- **Admin config / storage redesign** — `AdminConfig` struct splits operator fields from
+  `RobotConfig`; `BackupPayload { data, checksum, backed_up_at }` for portable snapshots;
+  `StorageHal::backup` / `restore` replace the old `load_storage_config`/`store_storage_config`;
+  `GET /config/backup` and `POST /config/restore` routes replace `/storage/config`;
+  `POST /control/reload-config` removed; `RobotState::Provisioning` added; 503 gate for
+  non-admin routes when provisioning; `version` moved into `Capabilities`; crate bumped to
+  `v0.5.0`.
+- **RAM-backed StorageHal** — `src/storage/ram.rs` provides `RamStorageHal` (holds
+  `Option<AdminConfig>` in RAM); `backup()` serializes + CRC32-checksums; `restore()`
+  stores the payload; pre-seeded default config (`token: "dev"`, `short`/`long` glass
+  types); replaces `StubStorageHal` in `main.rs`.
+- **Dispense size → volume scaling** — `handle_create_job` now resolves `size` →
+  `GlassType.volume` (abstract operator-defined unit), normalizes recipe ratios
+  (`amount_i = (r_i / Σr) × glass.volume`), builds `Vec<DispenseItem>` with
+  pre-computed `amount: f32`, and passes it to `DispenseHal::create_job`. Returns
+  HTTP 422 for unknown size or empty items. `max_total_parts` removed (redundant);
+  `GlassType.volume_ml` renamed to `GlassType.volume`. Crate bumped to `v0.6.0`.
+- **SSE job completion events** — `SseServer` poll loop now emits a terminal
+  `job_update` (last-known state) when a job disappears from `list_jobs()`.
+  Keep-alive timer resets on terminal events. `API.yaml` `/events` description
+  updated to document terminal event behavior.
 
 ---
 
-## Dispense Handler: Size → Volume Scaling
 
-`POST /v1/dispense/jobs` accepts a `size` field (`short | medium | long`) but the
-handler does not yet resolve it to a volume or scale ingredient amounts. A `TODO`
-comment marks the location in `src/server/handlers/dispense.rs`:
 
-1. Read active config via `ConfigHal` to get `glass_types`.
-2. Find the matching `GlassType` by `id == size`; return HTTP 422 if not found.
-3. Compute `part_ml = glass_type.volume_ml / total_parts`.
-4. Scale each `JobItem` to ml; apply `LiquidCalibration.factor` per liquid.
-5. Wait for `SensorHal::glass_state().present == true` before dispatching to HAL.
-
-This requires the handler signature to also accept `ConfigHal` and `SensorHal`
-generic parameters (currently only `DispenseHal` is passed).
-
----
-
-## Server-Sent Events (SSE)
-
-`GET /v1/events` is specified in `API.yaml`. No trait method or handler
-exists for it. Design the event model before implementing:
-
-- What events are emitted? (state changes, job completion, errors, etc.)
-- How does the HAL signal events? (callback registration, polling, async
-  channel)
-- SSE over raw embassy TCP sockets requires `text/event-stream` content type
-  and chunked transfer encoding.
-
----
-
-## `StorageHal` Implementation
-
-No concrete implementation of `StorageHal` exists anywhere. Provide at
-minimum a RAM-backed stub that satisfies the trait for testing purposes,
-then replace with a real implementation (EEPROM, flash sector, SD card,
-etc.) for production.
-
----
-
-## Testing
-
-No automated tests exist. To add them:
-
-1. Uncomment `test-case = "3.2"` in `[dev-dependencies]` in `Cargo.toml`.
-2. Uncomment `embedded-hal-mock = "0.7.2"` to create mock HAL
-   implementations for unit testing.
-3. Add `#[cfg(test)]` modules to each handler file testing against mock HAL
-   implementations.
-4. Add integration tests that send HTTP requests to a test server.

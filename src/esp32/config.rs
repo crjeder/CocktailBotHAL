@@ -20,7 +20,7 @@ impl Esp32Config {
 
 fn stub_capabilities() -> Capabilities {
     Capabilities {
-        version: String::from("0.5.0"),
+        version: String::from("0.6.0"),
         level_reporting: LevelReporting::Binary,
         glass_typing: false,
         simultaneous_channels: 1,
@@ -34,18 +34,17 @@ fn default_admin_config() -> AdminConfig {
         glass_types: alloc::vec![
             GlassType {
                 id: String::from("short"),
-                volume_ml: 100.0,
+                volume: 100.0,
             },
             GlassType {
                 id: String::from("medium"),
-                volume_ml: 150.0,
+                volume: 150.0,
             },
             GlassType {
                 id: String::from("long"),
-                volume_ml: 200.0,
+                volume: 200.0,
             },
         ],
-        max_total_parts: 10,
         token: String::new(),
         admin_password: String::new(),
     }
@@ -58,7 +57,6 @@ impl ConfigHal for Esp32Config {
         RobotConfig {
             liquids: admin.liquids,
             glass_types: admin.glass_types,
-            max_total_parts: admin.max_total_parts,
             capabilities: stub_capabilities(),
             token: admin.token,
             admin_password: admin.admin_password,

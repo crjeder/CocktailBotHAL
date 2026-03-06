@@ -150,10 +150,10 @@ fn config_update_and_retrieve() {
     block_on(async {
         let mut hal = MockConfigHal::new(test_robot_config());
         let mut admin = test_admin_config();
-        admin.max_total_parts = 20;
+        admin.token = "new-token".to_string();
         hal.update_active_config(admin).await.unwrap();
         let cfg = hal.get_active_config().await;
-        assert_eq!(cfg.max_total_parts, 20);
+        assert_eq!(cfg.token, "new-token");
     });
 }
 
@@ -215,10 +215,10 @@ fn storage_restore_replaces_previous() {
         let mut hal = MockStorageHal::new();
         hal.restore(test_admin_config()).await.unwrap();
         let mut admin2 = test_admin_config();
-        admin2.max_total_parts = 99;
+        admin2.token = "updated-token".to_string();
         hal.restore(admin2).await.unwrap();
         let payload = hal.backup().await.unwrap();
-        assert_eq!(payload.data.max_total_parts, 99);
+        assert_eq!(payload.data.token, "updated-token");
     });
 }
 
@@ -329,9 +329,9 @@ fn dispense_create_job() {
             .create_job(
                 "job-1".to_string(),
                 "My Drink".to_string(),
-                alloc::vec![JobItem {
+                alloc::vec![DispenseItem {
                     liquid_id: "vodka".to_string(),
-                    parts: 2,
+                    amount: 60.0,
                 }],
                 false,
             )
@@ -346,9 +346,9 @@ fn dispense_create_job() {
 fn dispense_job_ids_increment() {
     block_on(async {
         let mut hal = MockDispenseHal::new();
-        let items = alloc::vec![JobItem {
+        let items = alloc::vec![DispenseItem {
             liquid_id: "vodka".to_string(),
-            parts: 1,
+            amount: 100.0,
         }];
         let c1 = hal
             .create_job(
@@ -674,8 +674,8 @@ fn robot_config_json_roundtrip() {
     let json = serde_json::to_string(&cfg).unwrap();
     let parsed: RobotConfig = serde_json::from_str(&json).unwrap();
     assert_eq!(parsed.liquids.len(), cfg.liquids.len());
-    assert_eq!(parsed.max_total_parts, cfg.max_total_parts);
-    assert_eq!(parsed.capabilities.version, "0.5.0");
+    assert_eq!(parsed.glass_types.len(), cfg.glass_types.len());
+    assert_eq!(parsed.capabilities.version, "0.6.0");
 }
 
 #[test]

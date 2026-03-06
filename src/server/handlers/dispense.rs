@@ -9,7 +9,7 @@ use embassy_time::Instant;
 use embedded_io_async::Write;
 use serde::Deserialize;
 
-use crate::hal::{DispenseHal, JobItem};
+use crate::hal::{DispenseHal, DispenseItem, JobItem, RobotConfig};
 use crate::server::http::{self, HttpRequest};
 
 /// Maximum length of the sanitized name prefix in the generated `job_id`.
@@ -83,6 +83,7 @@ fn hex_nibble(n: u8) -> u8 {
 /// POST /v1/dispense/jobs — create and queue a new dispensing job.
 pub async fn handle_create_job<Disp: DispenseHal, W: Write + Unpin>(
     dispense: &mut Disp,
+    config: &RobotConfig,
     request: &HttpRequest,
     socket: &mut W,
 ) {
@@ -110,16 +111,47 @@ pub async fn handle_create_job<Disp: DispenseHal, W: Write + Unpin>(
         }
     };
 
+    // Resolve size → glass volume.
+    let glass = config.glass_types.iter().find(|g| g.id == body.size);
+    let glass = match glass {
+        Some(g) => g,
+        None => {
+            http::write_json(socket, 422, &serde_json::json!({"error": "unknown size"}))
+                .await
+                .ok();
+            return;
+        }
+    };
+
+    // Guard: empty items would cause division by zero in normalization.
+    if body.items.is_empty() {
+        http::write_json(
+            socket,
+            422,
+            &serde_json::json!({"error": "items must not be empty"}),
+        )
+        .await
+        .ok();
+        return;
+    }
+
+    // Normalize recipe ratios to dispenser volumes.
+    // amount_i = (r_i / Σr) × glass.volume
+    let total_r = body.items.iter().map(|i| i.parts).sum::<u32>() as f32;
+    let scale = glass.volume / total_r;
+    let dispense_items: Vec<DispenseItem> = body
+        .items
+        .iter()
+        .map(|i| DispenseItem {
+            liquid_id: i.liquid_id.clone(),
+            amount: i.parts as f32 * scale,
+        })
+        .collect();
+
     let job_id = generate_job_id(&body.name);
 
-    // TODO: resolve body.size against config.glass_types to get volume_ml,
-    // compute part_ml = volume_ml / total_parts, and scale each item to ml
-    // before passing to the HAL. Return HTTP 422 if size is not found.
-    // Also: wait for glass_sensor.present == true before dispatching.
-    let _ = &body.size;
-
     match dispense
-        .create_job(job_id, body.name, body.items, body.parallel)
+        .create_job(job_id, body.name, dispense_items, body.parallel)
         .await
     {
         Ok(created) => {
@@ -193,7 +225,7 @@ pub async fn handle_cancel_job<Disp: DispenseHal, W: Write + Unpin>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hal::mock::{test_error, MockDispenseHal, MockWrite};
+    use crate::hal::mock::{test_error, test_robot_config, MockDispenseHal, MockWrite};
     use futures::executor::block_on;
 
     #[test]
@@ -233,6 +265,44 @@ mod tests {
         block_on(async {
             let mut hal = MockDispenseHal::new();
             hal.fail_next = Some(test_error());
+            let config = test_robot_config();
+            let req = HttpRequest {
+                method: "POST".to_string(),
+                path: "/v1/dispense/jobs".to_string(),
+                headers: alloc::vec![],
+                body:
+                    br#"{"name":"test","size":"medium","items":[{"liquid_id":"vodka","parts":1}]}"#
+                        .to_vec(),
+            };
+            let mut buf = MockWrite::new();
+            handle_create_job(&mut hal, &config, &req, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 500"));
+        });
+    }
+
+    #[test]
+    fn dispense_create_job_unknown_size_returns_422() {
+        block_on(async {
+            let mut hal = MockDispenseHal::new();
+            let config = test_robot_config();
+            let req = HttpRequest {
+                method: "POST".to_string(),
+                path: "/v1/dispense/jobs".to_string(),
+                headers: alloc::vec![],
+                body: br#"{"name":"test","size":"nonexistent","items":[{"liquid_id":"vodka","parts":1}]}"#
+                    .to_vec(),
+            };
+            let mut buf = MockWrite::new();
+            handle_create_job(&mut hal, &config, &req, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 422"));
+        });
+    }
+
+    #[test]
+    fn dispense_create_job_empty_items_returns_422() {
+        block_on(async {
+            let mut hal = MockDispenseHal::new();
+            let config = test_robot_config();
             let req = HttpRequest {
                 method: "POST".to_string(),
                 path: "/v1/dispense/jobs".to_string(),
@@ -240,8 +310,8 @@ mod tests {
                 body: br#"{"name":"test","size":"medium","items":[]}"#.to_vec(),
             };
             let mut buf = MockWrite::new();
-            handle_create_job(&mut hal, &req, &mut buf).await;
-            assert!(buf.as_str().contains("HTTP/1.1 500"));
+            handle_create_job(&mut hal, &config, &req, &mut buf).await;
+            assert!(buf.as_str().contains("HTTP/1.1 422"));
         });
     }
 }

@@ -30,8 +30,8 @@ use status::Esp32Status;
 use storage::Esp32Storage;
 
 use crate::hal::{
-    AdminConfig, BackupPayload, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
-    GlassSensorState, JobCreated, JobItem, JobStatus, LevelState, PasswordHasher, RobotConfig,
+    AdminConfig, BackupPayload, CleaningHal, ConfigHal, ControlHal, DispenseHal, DispenseItem,
+    ErrorInfo, GlassSensorState, JobCreated, JobStatus, LevelState, PasswordHasher, RobotConfig,
     RobotState, SensorHal, StatusHal, StorageHal,
 };
 
@@ -141,7 +141,7 @@ impl DispenseHal for Esp32Hal {
         &mut self,
         job_id: String,
         name: String,
-        items: Vec<JobItem>,
+        items: Vec<DispenseItem>,
         parallel: bool,
     ) -> Result<JobCreated, ErrorInfo> {
         self.dispense

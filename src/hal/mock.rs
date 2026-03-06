@@ -16,8 +16,8 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::hal::{
-    AdminConfig, BackupPayload, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
-    GlassSensorState, GlassType, JobCreated, JobItem, JobState, JobStatus, LevelReporting,
+    AdminConfig, BackupPayload, CleaningHal, ConfigHal, ControlHal, DispenseHal, DispenseItem,
+    ErrorInfo, GlassSensorState, GlassType, JobCreated, JobState, JobStatus, LevelReporting,
     LevelState, LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState,
     SensorHal, StatusHal, StorageHal,
 };
@@ -189,7 +189,6 @@ impl ConfigHal for MockConfigHal {
         }
         self.config.liquids = cfg.liquids;
         self.config.glass_types = cfg.glass_types;
-        self.config.max_total_parts = cfg.max_total_parts;
         self.config.token = cfg.token;
         self.config.admin_password = cfg.admin_password;
         Ok(())
@@ -330,7 +329,7 @@ impl DispenseHal for MockDispenseHal {
         &mut self,
         job_id: String,
         name: String,
-        _items: Vec<JobItem>,
+        _items: Vec<DispenseItem>,
         _parallel: bool,
     ) -> Result<JobCreated, ErrorInfo> {
         if let Some(e) = self.fail_next.take() {
@@ -473,11 +472,10 @@ pub fn test_robot_config() -> RobotConfig {
         }],
         glass_types: alloc::vec![GlassType {
             id: "medium".to_string(),
-            volume_ml: 200.0,
+            volume: 200.0,
         }],
-        max_total_parts: 10,
         capabilities: Capabilities {
-            version: "0.5.0".to_string(),
+            version: "0.6.0".to_string(),
             level_reporting: LevelReporting::Binary,
             glass_typing: false,
             simultaneous_channels: 2,
@@ -498,9 +496,8 @@ pub fn test_admin_config() -> AdminConfig {
         }],
         glass_types: alloc::vec![GlassType {
             id: "medium".to_string(),
-            volume_ml: 200.0,
+            volume: 200.0,
         }],
-        max_total_parts: 10,
         token: String::new(),
         admin_password: String::new(),
     }

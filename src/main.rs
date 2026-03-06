@@ -30,8 +30,8 @@ use storage::RamStorageHal;
 #[cfg(not(test))]
 use embassy_executor::{Executor, Spawner};
 use hal::{
-    AdminConfig, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
-    GlassSensorState, GlassType, JobCreated, JobItem, JobStatus, LevelReporting, LevelState,
+    AdminConfig, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, DispenseItem,
+    ErrorInfo, GlassSensorState, GlassType, JobCreated, JobStatus, LevelReporting, LevelState,
     LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal,
 };
 #[cfg(not(test))]
@@ -85,20 +85,19 @@ impl ConfigHal for StubConfigHal {
             glass_types: vec![
                 GlassType {
                     id: String::from("short"),
-                    volume_ml: 100.0,
+                    volume: 100.0,
                 },
                 GlassType {
                     id: String::from("medium"),
-                    volume_ml: 150.0,
+                    volume: 150.0,
                 },
                 GlassType {
                     id: String::from("long"),
-                    volume_ml: 200.0,
+                    volume: 200.0,
                 },
             ],
-            max_total_parts: 10,
             capabilities: Capabilities {
-                version: String::from("0.5.0"),
+                version: String::from("0.6.0"),
                 level_reporting: LevelReporting::Binary,
                 glass_typing: false,
                 simultaneous_channels: 1,
@@ -131,7 +130,7 @@ impl DispenseHal for StubDispenseHal {
         &mut self,
         job_id: String,
         _name: String,
-        _items: Vec<JobItem>,
+        _items: Vec<DispenseItem>,
         _parallel: bool,
     ) -> Result<JobCreated, ErrorInfo> {
         Ok(JobCreated {

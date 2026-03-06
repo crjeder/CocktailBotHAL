@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Glass type configuration
 `AdminConfig` SHALL include a `glass_types: Vec<GlassType>` field where each
@@ -74,3 +74,20 @@ seconds-per-unit for a pump, grams-per-unit for a scale).
 - **GIVEN** `calibration.factor = 0.95` for a channel
 - **WHEN** the computed `amount` for that channel is `100.0`
 - **THEN** the HAL uses `95.0` (in hardware units) for that channel
+
+## REMOVED Requirements
+
+### Requirement: max_total_parts safety limit
+**Reason**: Redundant — by construction, `Σ(amount_i) = glass.volume`, so the
+maximum total dispenser volume is bounded by the largest `GlassType.volume`
+configured by the admin. A separate `max_total_parts` cap adds no protection
+that `glass_types` configuration does not already provide.
+**Migration**: Remove `max_total_parts` from `AdminConfig` and `RobotConfig`
+structs and from `PATCH /config` / `GET /config` API payloads.
+
+### Requirement: Job size field
+**Reason**: `JobStatus.size_ml` was specced but never implemented. With the
+volume unit now abstract (not necessarily ml), the field name is misleading.
+A future `JobStatus.total_volume` field may be added when `JobStatus` is
+extended, but it is out of scope for this change.
+**Migration**: No API migration needed — the field was never in the wire format.

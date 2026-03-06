@@ -45,8 +45,25 @@ pub struct LiquidCalibration {
 pub struct GlassType {
     /// Size name, e.g. `"short"`, `"medium"`, `"long"`.
     pub id: String,
-    /// Target fill volume in millilitres.
-    pub volume_ml: f32,
+    /// Target fill volume in the operator's chosen unit (ml, cl, oz, etc.).
+    /// Must be consistent with all other `volume` values and all
+    /// `LiquidCalibration.factor` values within a single robot.
+    pub volume: f32,
+}
+
+/// Per-ingredient dispenser volume passed to [`DispenseHal::create_job`].
+///
+/// `amount` is pre-computed by the server layer from the recipe ratio and the
+/// requested glass volume: `amount_i = (r_i / Σr) × glass.volume`.  The HAL
+/// implementation applies `LiquidCalibration.factor` internally to convert
+/// this abstract volume into hardware-specific commands (pump duration,
+/// weight target, etc.).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DispenseItem {
+    /// Identifier of the liquid to dispense (matches `LiquidConfig.id`).
+    pub liquid_id: String,
+    /// Pre-computed volume in the operator's abstract volume unit.
+    pub amount: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,8 +102,6 @@ pub struct AdminConfig {
     /// Available glass sizes. The server resolves the target volume for a
     /// dispensing job by matching the requested size against this list.
     pub glass_types: Vec<GlassType>,
-    /// Maximum total parts accepted in a single job (safety limit).
-    pub max_total_parts: u16,
     /// Bearer token required to authenticate API requests.
     /// An empty string causes the server to fall back to the compile-time default.
     #[serde(default)]
@@ -109,8 +124,6 @@ pub struct RobotConfig {
     pub liquids: Vec<LiquidConfig>,
     /// Available glass sizes.
     pub glass_types: Vec<GlassType>,
-    /// Maximum total parts accepted in a single job (safety limit).
-    pub max_total_parts: u16,
     /// Hardware-fixed properties for this firmware build.
     pub capabilities: Capabilities,
     /// Bearer token required to authenticate API requests.
@@ -238,7 +251,7 @@ pub trait DispenseHal {
         &mut self,
         job_id: String,
         name: String,
-        items: Vec<JobItem>,
+        items: Vec<DispenseItem>,
         parallel: bool,
     ) -> Result<JobCreated, ErrorInfo>;
 

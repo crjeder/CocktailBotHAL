@@ -180,6 +180,17 @@ impl<'a, Stat: StatusHal, Disp: DispenseHal> SseServer<'a, Stat, Disp> {
                 }
             }
 
+            // Emit a terminal job_update for jobs that departed from the list.
+            for job in &prev.jobs {
+                let departed = !current.jobs.iter().any(|j| j.job_id == job.job_id);
+                if departed {
+                    if emit_job_event(socket, job).await.is_err() {
+                        return;
+                    }
+                    sent_event = true;
+                }
+            }
+
             if sent_event {
                 last_event_time = Instant::now();
             } else if Instant::now().duration_since(last_event_time) >= KEEPALIVE_INTERVAL {

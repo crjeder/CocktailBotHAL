@@ -5,7 +5,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::hal::{DispenseHal, ErrorInfo, JobCreated, JobItem, JobStatus};
+use crate::hal::{DispenseHal, DispenseItem, ErrorInfo, JobCreated, JobStatus};
 
 /// Stub implementation of [`DispenseHal`] for ESP32.
 pub struct Esp32Dispense;
@@ -21,7 +21,7 @@ impl DispenseHal for Esp32Dispense {
         &mut self,
         job_id: String,
         _name: String,
-        _items: Vec<JobItem>,
+        _items: Vec<DispenseItem>,
         _parallel: bool,
     ) -> Result<JobCreated, ErrorInfo> {
         // TODO: wire to hardware — enqueue job to dispense task scheduler
