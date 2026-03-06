@@ -25,9 +25,10 @@ use alloc::vec::Vec;
 #[cfg(not(test))]
 use embassy_executor::{Executor, Spawner};
 use hal::{
-    Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState,
-    GlassType, JobCreated, JobItem, JobStatus, LevelReporting, LevelState, LiquidCalibration,
-    LiquidConfig, RobotConfig, RobotState, SensorHal, StatusHal, StorageHal,
+    AdminConfig, BackupPayload, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal,
+    ErrorInfo, GlassSensorState, GlassType, JobCreated, JobItem, JobStatus, LevelReporting,
+    LevelState, LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState,
+    SensorHal, StatusHal, StorageHal,
 };
 #[cfg(not(test))]
 use server::{ApiServer, RobotHal};
@@ -53,9 +54,6 @@ impl ControlHal for StubControlHal {
     async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
-    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
-        todo!()
-    }
 }
 
 struct StubStatusHal;
@@ -74,7 +72,6 @@ struct StubConfigHal;
 impl ConfigHal for StubConfigHal {
     async fn get_active_config(&self) -> RobotConfig {
         RobotConfig {
-            version: String::from("0.4.0"),
             liquids: vec![LiquidConfig {
                 id: String::from("water"),
                 name: String::from("Water"),
@@ -97,31 +94,52 @@ impl ConfigHal for StubConfigHal {
             ],
             max_total_parts: 10,
             capabilities: Capabilities {
+                version: String::from("0.5.0"),
                 level_reporting: LevelReporting::Binary,
                 glass_typing: false,
                 simultaneous_channels: 1,
                 max_queue_depth: 5,
             },
             token: String::new(),
+            admin_password: String::new(),
         }
     }
-    async fn update_active_config(&mut self, _cfg: RobotConfig) -> Result<(), ErrorInfo> {
+    async fn update_active_config(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {
         todo!()
     }
 }
 
-struct StubStorageHal;
+struct StubStorageHal {
+    stored: Option<AdminConfig>,
+}
+
+impl StubStorageHal {
+    fn new() -> Self {
+        StubStorageHal { stored: None }
+    }
+}
 
 impl StorageHal for StubStorageHal {
-    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
-        todo!()
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo> {
+        // Returns Err when nothing has been stored yet (simulates empty flash).
+        let admin_cfg = self.stored.clone().ok_or_else(|| ErrorInfo {
+            code: String::from("NO_CONFIG"),
+            message: String::from("No configuration stored"),
+            hint: Some(String::from("POST /v1/config/restore to provision")),
+            recoverable: true,
+        })?;
+        let json = serde_json::to_string(&admin_cfg).unwrap_or_default();
+        let checksum = hal::crc32_hex(json.as_bytes());
+        Ok(BackupPayload {
+            data: admin_cfg,
+            checksum,
+            backed_up_at: String::from("1970-01-01T00:00:00Z"),
+        })
     }
-    async fn store_storage_config(
-        &mut self,
-        _cfg: RobotConfig,
-        _overwrite: bool,
-    ) -> Result<(), ErrorInfo> {
-        todo!()
+
+    async fn restore(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo> {
+        self.stored = Some(cfg);
+        Ok(())
     }
 }
 
@@ -170,6 +188,32 @@ impl CleaningHal for StubCleaningHal {
     }
     async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
         todo!()
+    }
+}
+
+/// Development-only password hasher.
+///
+/// Stores passwords in the format `stub$<plaintext>` and verifies them with
+/// a constant-time comparison.  Do NOT use in production.
+struct StubPasswordHasher;
+
+impl PasswordHasher for StubPasswordHasher {
+    fn hash(&self, password: &str) -> Result<String, ErrorInfo> {
+        Ok(alloc::format!("stub${}", password))
+    }
+
+    fn verify(&self, password: &str, stored_hash: &str) -> bool {
+        let expected = alloc::format!("stub${}", password);
+        let a = expected.as_bytes();
+        let b = stored_hash.as_bytes();
+        if a.len() != b.len() {
+            return false;
+        }
+        let mut diff: u8 = 0;
+        for (x, y) in a.iter().zip(b.iter()) {
+            diff |= x ^ y;
+        }
+        diff == 0
     }
 }
 
@@ -249,10 +293,11 @@ async fn async_main(spawner: Spawner) {
             control: StubControlHal,
             status: StubStatusHal,
             config: StubConfigHal,
-            storage: StubStorageHal,
+            storage: StubStorageHal::new(),
             sensors: StubSensorHal,
             dispense: StubDispenseHal,
             cleaning: StubCleaningHal,
+            hasher: StubPasswordHasher,
         },
     };
     // Real call: _server.run(net_stack).await — wire to embassy-net stack.

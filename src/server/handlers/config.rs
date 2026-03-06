@@ -1,28 +1,89 @@
 // src/server/handlers/config.rs
 //
-// Handlers for GET/PATCH /v1/config and GET/POST /v1/storage/config
+// Handlers for GET/PATCH /v1/config, GET /v1/config/backup,
+// and POST /v1/config/restore.
 
 use embedded_io_async::Write;
 use serde::Deserialize;
 
-use crate::hal::{ConfigHal, RobotConfig, StorageHal};
+use crate::hal::{
+    crc32_hex, AdminConfig, ConfigHal, DispenseHal, JobState, PasswordHasher, StorageHal,
+};
 use crate::server::http::{self, HttpRequest};
 
+// ============================================================================
+// Pre-flight helper
+// ============================================================================
+
+/// Cancel all queued jobs and wait for any running job to finish.
+///
+/// Returns the IDs of jobs that were cancelled.  Called before applying any
+/// config mutation to ensure the robot is idle before the new config takes
+/// effect.
+pub async fn flush_queue_and_wait<Disp: DispenseHal>(
+    dispense: &mut Disp,
+) -> alloc::vec::Vec<alloc::string::String> {
+    use embassy_time::{Duration, Timer};
+
+    let jobs = dispense.list_jobs().await;
+    let mut cancelled = alloc::vec::Vec::new();
+    for job in &jobs {
+        if matches!(job.state, JobState::Queued) {
+            if dispense.cancel_job(&job.job_id).await.is_ok() {
+                cancelled.push(job.job_id.clone());
+            }
+        }
+    }
+    // Wait for any running job to reach a terminal state.
+    loop {
+        let jobs = dispense.list_jobs().await;
+        if !jobs.iter().any(|j| matches!(j.state, JobState::Running)) {
+            break;
+        }
+        Timer::after(Duration::from_millis(50)).await;
+    }
+    cancelled
+}
+
+// ============================================================================
+// Handlers
+// ============================================================================
+
 /// GET /v1/config — return active (RAM) configuration.
+///
+/// `admin_password` is always redacted (returned as `""`) so the stored hash
+/// is not exposed to non-admin clients.
 pub async fn handle_config_get<Cfg: ConfigHal, W: Write + Unpin>(config: &Cfg, socket: &mut W) {
-    let cfg = config.get_active_config().await;
+    let mut cfg = config.get_active_config().await;
+    cfg.admin_password = alloc::string::String::new();
     http::write_json(socket, 200, &serde_json::json!(cfg))
         .await
         .ok();
 }
 
-/// PATCH /v1/config — update active (RAM) configuration.
-pub async fn handle_config_patch<Cfg: ConfigHal, W: Write + Unpin>(
+/// PATCH /v1/config — update admin configuration.
+///
+/// The body is an `AdminConfig` JSON object.  If `admin_password` is non-empty
+/// it is treated as a new plaintext password and re-hashed before storing.
+/// If empty, the current hash is preserved.
+///
+/// Pre-flight: queued jobs are cancelled and any running job is awaited before
+/// the config is applied.  Auto-persists to flash via `StorageHal::restore`.
+pub async fn handle_config_patch<
+    Cfg: ConfigHal,
+    Stor: StorageHal,
+    Disp: DispenseHal,
+    H: PasswordHasher,
+    W: Write + Unpin,
+>(
     config: &mut Cfg,
+    storage: &mut Stor,
+    dispense: &mut Disp,
+    hasher: &H,
     request: &HttpRequest,
     socket: &mut W,
 ) {
-    let cfg: RobotConfig = match http::parse_body(request) {
+    let mut cfg: AdminConfig = match http::parse_body(request) {
         Ok(c) => c,
         Err(_) => {
             http::write_json(
@@ -36,9 +97,46 @@ pub async fn handle_config_patch<Cfg: ConfigHal, W: Write + Unpin>(
         }
     };
 
-    match config.update_active_config(cfg).await {
-        Ok(()) => {
-            http::write_json(socket, 200, &serde_json::json!({"status": "updated"}))
+    if cfg.admin_password.is_empty() {
+        // Preserve the current stored hash — client sent "" meaning "keep current".
+        cfg.admin_password = config.get_active_config().await.admin_password;
+    } else {
+        match hasher.hash(&cfg.admin_password) {
+            Ok(hash) => {
+                cfg.admin_password = hash;
+            }
+            Err(e) => {
+                http::write_hal_error(socket, &e).await.ok();
+                return;
+            }
+        }
+    }
+
+    let cancelled = flush_queue_and_wait(dispense).await;
+
+    if let Err(e) = config.update_active_config(cfg.clone()).await {
+        http::write_hal_error(socket, &e).await.ok();
+        return;
+    }
+    if let Err(e) = storage.restore(cfg).await {
+        http::write_hal_error(socket, &e).await.ok();
+        return;
+    }
+
+    http::write_json(
+        socket,
+        200,
+        &serde_json::json!({"status": "updated", "cancelled_job_ids": cancelled}),
+    )
+    .await
+    .ok();
+}
+
+/// GET /v1/config/backup — read persistent configuration as a signed payload.
+pub async fn handle_backup<Stor: StorageHal, W: Write + Unpin>(storage: &Stor, socket: &mut W) {
+    match storage.backup().await {
+        Ok(payload) => {
+            http::write_json(socket, 200, &serde_json::json!(payload))
                 .await
                 .ok();
         }
@@ -48,35 +146,28 @@ pub async fn handle_config_patch<Cfg: ConfigHal, W: Write + Unpin>(
     }
 }
 
-/// GET /v1/storage/config — read persistent configuration.
-pub async fn handle_storage_read<Stor: StorageHal, W: Write + Unpin>(
-    storage: &Stor,
-    socket: &mut W,
-) {
-    match storage.load_storage_config().await {
-        Ok(cfg) => {
-            http::write_json(socket, 200, &serde_json::json!({"data": cfg}))
-                .await
-                .ok();
-        }
-        Err(e) => {
-            http::write_hal_error(socket, &e).await.ok();
-        }
-    }
-}
-
-/// POST /v1/storage/config — write persistent configuration.
-/// Body: `{ "data": <RobotConfig>, "overwrite": bool }`
-pub async fn handle_storage_write<Stor: StorageHal, W: Write + Unpin>(
+/// POST /v1/config/restore — restore configuration from a backup payload.
+///
+/// Body: `{ "data": <AdminConfig>, "checksum": "<hex>" }`
+///
+/// Verifies the CRC32 checksum before applying.  Returns 422 on mismatch.
+/// Pre-flight: same as PATCH /config.  Auto-activates config in RAM.
+pub async fn handle_restore<
+    Cfg: ConfigHal,
+    Stor: StorageHal,
+    Disp: DispenseHal,
+    W: Write + Unpin,
+>(
+    config: &mut Cfg,
     storage: &mut Stor,
+    dispense: &mut Disp,
     request: &HttpRequest,
     socket: &mut W,
 ) {
     #[derive(Deserialize)]
     struct Body {
-        data: RobotConfig,
-        #[serde(default)]
-        overwrite: bool,
+        data: AdminConfig,
+        checksum: alloc::string::String,
     }
 
     let body: Body = match http::parse_body(request) {
@@ -93,17 +184,52 @@ pub async fn handle_storage_write<Stor: StorageHal, W: Write + Unpin>(
         }
     };
 
-    match storage
-        .store_storage_config(body.data, body.overwrite)
+    // Verify checksum.
+    let json = match serde_json::to_string(&body.data) {
+        Ok(s) => s,
+        Err(_) => {
+            http::write_json(
+                socket,
+                500,
+                &serde_json::json!({"error": "failed to serialise config"}),
+            )
+            .await
+            .ok();
+            return;
+        }
+    };
+    let expected = crc32_hex(json.as_bytes());
+    if expected != body.checksum {
+        http::write_json(
+            socket,
+            422,
+            &serde_json::json!({
+                "error": "checksum mismatch",
+                "expected": expected,
+                "received": body.checksum,
+            }),
+        )
         .await
-    {
-        Ok(()) => {
-            http::write_json(socket, 200, &serde_json::json!({"success": true}))
-                .await
-                .ok();
-        }
-        Err(e) => {
-            http::write_hal_error(socket, &e).await.ok();
-        }
+        .ok();
+        return;
     }
+
+    let cancelled = flush_queue_and_wait(dispense).await;
+
+    if let Err(e) = storage.restore(body.data.clone()).await {
+        http::write_hal_error(socket, &e).await.ok();
+        return;
+    }
+    if let Err(e) = config.update_active_config(body.data).await {
+        http::write_hal_error(socket, &e).await.ok();
+        return;
+    }
+
+    http::write_json(
+        socket,
+        200,
+        &serde_json::json!({"status": "restored", "cancelled_job_ids": cancelled}),
+    )
+    .await
+    .ok();
 }

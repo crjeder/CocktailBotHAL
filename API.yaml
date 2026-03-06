@@ -10,6 +10,13 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
+    basicAuth:
+      type: http
+      scheme: basic
+      description: |
+        HTTP Basic Auth for admin-only endpoints.  Username is always `admin`;
+        password is the value set via `PATCH /config` (`admin_password` field).
+        Default password is `changeme` — change before deployment.
 
   schemas:
 
@@ -24,6 +31,7 @@ components:
         - cleaning
         - drink_ready
         - error
+        - provisioning
 
     ErrorObject:
       type: object
@@ -58,7 +66,6 @@ components:
             for weight-based dispensing, seconds/ml for time-based). A value of
             1.0 delivers the computed volume without adjustment.
 
-
     LiquidConfig:
       type: object
       properties:
@@ -74,6 +81,9 @@ components:
     Capabilities:
       type: object
       properties:
+        version:
+          type: string
+          description: Firmware / hardware version string (e.g. "0.5.0").
         level_reporting:
           type: string
           enum: [binary, decimal]
@@ -85,11 +95,12 @@ components:
           type: integer
           description: Maximum number of jobs (running + queued) accepted simultaneously.
 
-    Config:
+    AdminConfig:
       type: object
+      description: |
+        Admin-owned configuration.  Persisted to flash via `POST /config/restore`
+        or `PATCH /config`.  Does not include hardware-fixed capabilities.
       properties:
-        version:
-          type: string
         liquids:
           type: array
           items:
@@ -102,18 +113,59 @@ components:
         max_total_parts:
           type: integer
           description: Maximum total parts accepted in a single job (safety limit).
+        token:
+          type: string
+          description: Bearer token for non-admin API access. Default is "changeme".
+        admin_password:
+          type: string
+          description: |
+            Write-only.  When supplied in `PATCH /config` or `POST /config/restore`,
+            treated as the new plaintext admin password — it is hashed before storage.
+            Always returned as `""` in `GET /config` responses (hash is never exposed).
+
+    Config:
+      type: object
+      description: |
+        Merged API-facing configuration returned by `GET /config`.
+        Combines `AdminConfig` fields with hardware-fixed `Capabilities`.
+      properties:
+        liquids:
+          type: array
+          items:
+            $ref: '#/components/schemas/LiquidConfig'
+        glass_types:
+          type: array
+          description: Available glass sizes.
+          items:
+            $ref: '#/components/schemas/GlassType'
+        max_total_parts:
+          type: integer
         capabilities:
           $ref: '#/components/schemas/Capabilities'
+        token:
+          type: string
+        admin_password:
+          type: string
+          description: Always returned as "". See AdminConfig.admin_password.
 
-    ConfigStoragePayload:
+    BackupPayload:
       type: object
+      description: |
+        Returned by `GET /config/backup` and accepted by `POST /config/restore`.
+        Contains the full admin configuration with a CRC32 checksum for integrity
+        verification.
       properties:
         data:
-          $ref: '#/components/schemas/Config'
-        valid:
-          type: boolean
+          $ref: '#/components/schemas/AdminConfig'
         checksum:
           type: string
+          description: |
+            CRC32/ISO-HDLC hex checksum (8 lowercase hex chars) of the
+            JSON-serialised `data` field.  Verified by the server on restore.
+        backed_up_at:
+          type: string
+          format: date-time
+          description: ISO 8601 UTC timestamp of when the backup was created.
 
     GlassSensor:
       type: object
@@ -206,6 +258,20 @@ components:
         progress_pct:
           type: number
 
+    ConfigMutationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [updated, restored]
+        cancelled_job_ids:
+          type: array
+          items:
+            type: string
+          description: |
+            IDs of jobs that were cancelled during the pre-flight queue flush
+            before applying the config change.
+
 security:
   - bearerAuth: []
 
@@ -221,6 +287,8 @@ paths:
   /control/power:
     post:
       summary: Power on/off robot hardware
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -235,6 +303,8 @@ paths:
   /control/power-save:
     post:
       summary: Enable or disable power save mode
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -249,6 +319,8 @@ paths:
   /control/reset:
     post:
       summary: Clear error states and reset to idle
+      security:
+        - basicAuth: []
       requestBody:
         content:
           application/json:
@@ -260,15 +332,15 @@ paths:
       responses:
         '200': { description: OK }
 
-  /control/reload-config:
-    post:
-      summary: Reload configuration from storage into active memory
-      responses:
-        '200': { description: Reloaded }
-
   /config:
     get:
       summary: Get active (RAM) configuration
+      description: |
+        Returns the merged configuration view: admin-owned fields plus
+        hardware-fixed capabilities.  `admin_password` is always returned
+        as `""` (the hash is never exposed).
+
+        Available in `provisioning` state.
       responses:
         '200':
           description: Active config
@@ -279,49 +351,88 @@ paths:
 
     patch:
       summary: Update active configuration
+      security:
+        - basicAuth: []
+      description: |
+        Update the admin-owned configuration.  Supplying a non-empty
+        `admin_password` field sets a new admin password — it is hashed
+        before storage.  Send `""` (or omit the field) to keep the current
+        admin password unchanged.
+
+        **Pre-flight:** All queued jobs are cancelled and any running job is
+        awaited before the config is applied.  The response includes the IDs
+        of cancelled jobs.
+
+        **Auto-persist:** The new config is written to flash automatically.
+        No separate restore step is needed.
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Config'
-      responses:
-        '200': { description: Updated }
-
-  /storage/config:
-    get:
-      summary: Read configuration from non-volatile storage
+              $ref: '#/components/schemas/AdminConfig'
       responses:
         '200':
-          description: Stored config
+          description: Updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ConfigStoragePayload'
+                $ref: '#/components/schemas/ConfigMutationResponse'
 
+  /config/backup:
+    get:
+      summary: Read configuration backup from non-volatile storage
+      security:
+        - basicAuth: []
+      description: |
+        Returns the persisted `AdminConfig` along with a CRC32 checksum and
+        creation timestamp.  Returns `500` if no configuration has been stored
+        yet (first boot / factory reset).
+      responses:
+        '200':
+          description: Backup payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BackupPayload'
+        '500':
+          description: No stored configuration (flash empty or corrupt)
+
+  /config/restore:
     post:
-      summary: Write configuration to non-volatile storage
+      summary: Restore configuration from a backup payload
+      security:
+        - basicAuth: []
+      description: |
+        Accepts a `BackupPayload` (as produced by `GET /config/backup`) and
+        restores the admin configuration.  The server verifies the CRC32
+        checksum before applying; returns `422` on mismatch.
+
+        **Pre-flight:** Same as `PATCH /config` — queued jobs are cancelled,
+        running job is awaited.
+
+        If the robot is in `provisioning` state, a successful restore
+        transitions it to `idle`.
       requestBody:
         content:
           application/json:
             schema:
               type: object
+              required: [data, checksum]
               properties:
                 data:
-                  $ref: '#/components/schemas/Config'
-                overwrite:
-                  type: boolean
+                  $ref: '#/components/schemas/AdminConfig'
+                checksum:
+                  type: string
+                  description: CRC32 hex string from the original backup payload.
       responses:
         '200':
-          description: Stored
+          description: Restored
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success: { type: boolean }
-                  written_at: { type: string, format: date-time }
-                  checksum: { type: string }
-                  requires_reboot: { type: boolean }
+                $ref: '#/components/schemas/ConfigMutationResponse'
+        '422':
+          description: Checksum mismatch
 
   /sensors/glass:
     get:
@@ -365,7 +476,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/JobCreateResponse'
         '503':
-          description: Job queue is full
+          description: Job queue is full or robot is in provisioning state
           content:
             application/json:
               schema:
@@ -400,12 +511,16 @@ paths:
   /cleaning/start:
     post:
       summary: Start a simple cleaning program
+      security:
+        - basicAuth: []
       responses:
         '200': { description: Started }
 
   /cleaning/stop:
     post:
       summary: Stop cleaning
+      security:
+        - basicAuth: []
       responses:
         '200': { description: Stopped }
 

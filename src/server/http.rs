@@ -194,6 +194,19 @@ pub fn parse_body<T: serde::de::DeserializeOwned>(request: &HttpRequest) -> Resu
     serde_json::from_slice(&request.body).map_err(|_| HttpError::DeserializeFailed)
 }
 
+/// Decode an `Authorization: Basic <base64>` header value and return the
+/// password component.  The expected credential format is `admin:<password>`.
+/// Returns `None` if the header value does not start with `"Basic "`, the
+/// base64 payload is invalid, or the decoded string contains no `':'`.
+pub fn basic_auth_password(header_value: &str) -> Option<String> {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    let encoded = header_value.strip_prefix("Basic ")?;
+    let decoded = STANDARD.decode(encoded).ok()?;
+    let decoded_str = core::str::from_utf8(&decoded).ok()?;
+    let colon = decoded_str.find(':')?;
+    Some(decoded_str[colon + 1..].into())
+}
+
 /// Map HTTP status codes to reason phrases.
 fn status_reason(code: u16) -> &'static str {
     match code {
@@ -205,5 +218,39 @@ fn status_reason(code: u16) -> &'static str {
         405 => "Method Not Allowed",
         500 => "Internal Server Error",
         _ => "OK",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::string::ToString;
+
+    #[test]
+    fn basic_auth_password_valid() {
+        // "admin:changeme" base64 → "YWRtaW46Y2hhbmdlbWU="
+        let header = "Basic YWRtaW46Y2hhbmdlbWU=";
+        assert_eq!(basic_auth_password(header).as_deref(), Some("changeme"));
+    }
+
+    #[test]
+    fn basic_auth_password_rejects_bearer() {
+        // A Bearer token must not parse as Basic Auth.
+        let header = "Bearer some-token";
+        assert_eq!(basic_auth_password(header), None);
+    }
+
+    #[test]
+    fn basic_auth_password_empty_password() {
+        // "admin:" → password is empty string (valid Basic Auth, empty password)
+        // base64("admin:") = "YWRtaW46"
+        let header = "Basic YWRtaW46";
+        assert_eq!(basic_auth_password(header).as_deref(), Some(""));
+    }
+
+    #[test]
+    fn basic_auth_password_invalid_base64() {
+        let header = "Basic !!!not-base64!!!";
+        assert_eq!(basic_auth_password(header), None);
     }
 }

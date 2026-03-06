@@ -29,9 +29,4 @@ impl ControlHal for Esp32Control {
         // TODO: wire to hardware — clear fault latches, reset error state
         Ok(())
     }
-
-    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
-        // TODO: wire to hardware — reload config from NVS flash
-        Ok(())
-    }
 }

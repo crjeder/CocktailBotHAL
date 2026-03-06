@@ -1,5 +1,45 @@
 ## Claude Session Progress
 
+### 2026-03-06: add-admin-password-auth (v0.4.0 → remains v0.4.0, backwards-compatible addition)
+
+**Branch:** claude/add-admin-password-auth-3Mjmi
+
+**Changes made:**
+- `src/hal/mod.rs`: Added `PasswordHasher` trait (`hash`, `verify` methods); added
+  `admin_password: String` field to `RobotConfig` with `#[serde(default)]`
+- `src/server/http.rs`: Added `basic_auth_password()` — decodes `Authorization: Basic <b64>`,
+  extracts password component
+- `src/server/mod.rs`: Added `DEFAULT_ADMIN_PASSWORD`, `ADMIN_ROUTES` constant;
+  added `Hasher: PasswordHasher` as 8th generic to `RobotHal`/`ApiServer`; split
+  auth dispatch — admin routes use Basic Auth + `PasswordHasher::verify`, other
+  routes keep Bearer token; updated `PATCH /config` call site to pass `&self.hal.hasher`
+- `src/server/handlers/config.rs`: `handle_config_get` redacts `admin_password` (returns `""`);
+  `handle_config_patch` accepts `H: PasswordHasher` — hashes non-empty `admin_password`,
+  preserves existing hash when empty
+- `src/main.rs`: Added `StubPasswordHasher` (constant-time XOR verify, `stub$<pw>` format);
+  added `admin_password: String::new()` to stub config; wired into `RobotHal`
+- `src/esp32/hasher.rs` (NEW): `Esp32PasswordHasher` using PBKDF2-HMAC-SHA256 via
+  `pbkdf2` + `sha2` crates; format `pbkdf2$<iters>$<salt_hex>$<dk_hex>`;
+  salt from `AtomicU32` counter (TODO: replace with `esp_hal::rng` for production)
+- `src/esp32/mod.rs`: Added `mod hasher`; re-exported `Esp32PasswordHasher`;
+  added `hasher: Esp32PasswordHasher` field to `Esp32Hal`; added `PasswordHasher for Esp32Hal`
+- `src/esp32/config.rs`: Added `admin_password: String::new()` to default config
+- `Cargo.toml`: Added `base64 = "0.22"` (alloc feature); `sha2 = "0.10"` and
+  `pbkdf2 = "0.12"` (hmac feature) as optional deps gated on `esp32` feature
+- `API.yaml`: Added `basicAuth` security scheme; added `admin_password` to Config schema
+  (write-only, returns `""`); annotated all 9 admin routes with `security: [{basicAuth: []}]`;
+  added description to `PATCH /config` about password re-hashing
+
+**Status:** `cargo check` passes (default + `--features esp32`). `cargo fmt` clean.
+
+**Next steps:**
+- Task 8.4: Manual/integration test — verify PATCH /config returns 401 with Bearer token,
+  200 with correct Basic Auth
+- Entry point: replace placeholder main() with `#[esp_hal::main]`
+- StorageHal: no concrete implementation (stubs return NOT_IMPLEMENTED error)
+- SSE events: event model not designed yet
+
+
 ### 2026-03-04: Bearer token authentication + dependency fixes
 
 **Commits:** 9f611b4, f8344b0, 812c038
