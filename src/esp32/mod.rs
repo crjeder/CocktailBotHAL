@@ -30,9 +30,9 @@ use status::Esp32Status;
 use storage::Esp32Storage;
 
 use crate::hal::{
-    CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo, GlassSensorState, JobCreated,
-    JobItem, JobStatus, LevelState, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal,
-    StorageHal,
+    AdminConfig, BackupPayload, CleaningHal, ConfigHal, ControlHal, DispenseHal, ErrorInfo,
+    GlassSensorState, JobCreated, JobItem, JobStatus, LevelState, PasswordHasher, RobotConfig,
+    RobotState, SensorHal, StatusHal, StorageHal,
 };
 
 /// Composite HAL implementation for ESP32.
@@ -94,10 +94,6 @@ impl ControlHal for Esp32Hal {
     async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         self.control.reset_errors().await
     }
-
-    async fn reload_config(&mut self) -> Result<(), ErrorInfo> {
-        self.control.reload_config().await
-    }
 }
 
 impl StatusHal for Esp32Hal {
@@ -115,22 +111,18 @@ impl ConfigHal for Esp32Hal {
         self.config.get_active_config().await
     }
 
-    async fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo> {
+    async fn update_active_config(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo> {
         self.config.update_active_config(cfg).await
     }
 }
 
 impl StorageHal for Esp32Hal {
-    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo> {
-        self.storage.load_storage_config().await
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo> {
+        self.storage.backup().await
     }
 
-    async fn store_storage_config(
-        &mut self,
-        cfg: RobotConfig,
-        overwrite: bool,
-    ) -> Result<(), ErrorInfo> {
-        self.storage.store_storage_config(cfg, overwrite).await
+    async fn restore(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo> {
+        self.storage.restore(cfg).await
     }
 }
 

@@ -15,6 +15,9 @@ pub enum RobotState {
     Cleaning,
     DrinkReady,
     Error,
+    /// Robot has no stored configuration (first boot or factory reset).
+    /// Only admin endpoints are active in this state.
+    Provisioning,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -56,6 +59,8 @@ pub struct LiquidConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Capabilities {
+    /// Firmware / hardware version string (e.g. `"0.5.0"`).
+    pub version: String,
     pub level_reporting: LevelReporting,
     pub glass_typing: bool,
     pub simultaneous_channels: u8,
@@ -70,16 +75,18 @@ pub enum LevelReporting {
     Decimal,
 }
 
+/// Admin-owned configuration: persisted to flash, mutated via API.
+///
+/// Does not include hardware-fixed properties (`Capabilities`).  The server
+/// merges `AdminConfig` with `Capabilities` when serving `GET /config`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RobotConfig {
-    pub version: String,
+pub struct AdminConfig {
     pub liquids: Vec<LiquidConfig>,
     /// Available glass sizes. The server resolves the target volume for a
     /// dispensing job by matching the requested size against this list.
     pub glass_types: Vec<GlassType>,
     /// Maximum total parts accepted in a single job (safety limit).
     pub max_total_parts: u16,
-    pub capabilities: Capabilities,
     /// Bearer token required to authenticate API requests.
     /// An empty string causes the server to fall back to the compile-time default.
     #[serde(default)]
@@ -90,6 +97,40 @@ pub struct RobotConfig {
     /// the compile-time default admin password.
     #[serde(default)]
     pub admin_password: String,
+}
+
+/// Merged API-facing configuration returned by `GET /config`.
+///
+/// Combines admin-owned fields (`AdminConfig`) with hardware-fixed properties
+/// (`Capabilities`).  Constructed by the HAL implementation; never stored
+/// directly in flash.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RobotConfig {
+    pub liquids: Vec<LiquidConfig>,
+    /// Available glass sizes.
+    pub glass_types: Vec<GlassType>,
+    /// Maximum total parts accepted in a single job (safety limit).
+    pub max_total_parts: u16,
+    /// Hardware-fixed properties for this firmware build.
+    pub capabilities: Capabilities,
+    /// Bearer token required to authenticate API requests.
+    #[serde(default)]
+    pub token: String,
+    /// Hashed admin password (write-only; always `""` in GET responses).
+    #[serde(default)]
+    pub admin_password: String,
+}
+
+/// Payload returned by `GET /config/backup` and accepted by
+/// `POST /config/restore`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackupPayload {
+    /// The admin-owned configuration data.
+    pub data: AdminConfig,
+    /// CRC32/ISO-HDLC hex checksum of the JSON-serialised `data` field.
+    pub checksum: String,
+    /// ISO 8601 UTC timestamp of when the backup was created.
+    pub backed_up_at: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -155,12 +196,11 @@ pub struct JobStatus {
 // TRAIT DEFINITIONS
 // ============================================================================
 
-/// Power / Reset / Reload Config
+/// Power / Reset control
 pub trait ControlHal {
     async fn power(&mut self, on: bool) -> Result<(), ErrorInfo>;
     async fn power_save(&mut self, enabled: bool) -> Result<(), ErrorInfo>;
     async fn reset_errors(&mut self) -> Result<(), ErrorInfo>;
-    async fn reload_config(&mut self) -> Result<(), ErrorInfo>;
 }
 
 /// Status information
@@ -171,18 +211,19 @@ pub trait StatusHal {
 
 /// Active config (RAM)
 pub trait ConfigHal {
+    /// Return the merged view: admin-owned fields + hardware capabilities.
     async fn get_active_config(&self) -> RobotConfig;
-    async fn update_active_config(&mut self, cfg: RobotConfig) -> Result<(), ErrorInfo>;
+    /// Apply admin-owned configuration to the in-RAM store.
+    async fn update_active_config(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo>;
 }
 
 /// Persistent config (Flash)
 pub trait StorageHal {
-    async fn load_storage_config(&self) -> Result<RobotConfig, ErrorInfo>;
-    async fn store_storage_config(
-        &mut self,
-        cfg: RobotConfig,
-        overwrite: bool,
-    ) -> Result<(), ErrorInfo>;
+    /// Read admin config from flash and return it with a CRC32 checksum and
+    /// timestamp.  Returns `Err` when flash is empty or corrupt.
+    async fn backup(&self) -> Result<BackupPayload, ErrorInfo>;
+    /// Write admin config to flash, overwriting any existing data.
+    async fn restore(&mut self, cfg: AdminConfig) -> Result<(), ErrorInfo>;
 }
 
 /// Sensor access
@@ -228,3 +269,27 @@ pub trait PasswordHasher {
 
 #[cfg(test)]
 mod tests;
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+/// Compute a CRC32/ISO-HDLC checksum over `data` and return it as an 8-char
+/// lowercase hex string (e.g. `"a1b2c3d4"`).
+///
+/// Used by [`StorageHal`] implementations to produce and verify the
+/// [`BackupPayload::checksum`] field.
+pub fn crc32_hex(data: &[u8]) -> String {
+    let mut crc = 0xFFFF_FFFFu32;
+    for &byte in data {
+        crc ^= u32::from(byte);
+        for _ in 0..8 {
+            if crc & 1 != 0 {
+                crc = (crc >> 1) ^ 0xEDB8_8320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    alloc::format!("{:08x}", !crc)
+}

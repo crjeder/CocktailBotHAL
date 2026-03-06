@@ -91,19 +91,3 @@ pub async fn handle_reset<Ctrl: ControlHal, W: Write + Unpin>(control: &mut Ctrl
         }
     }
 }
-
-/// POST /v1/control/reload-config — reload config from persistent
-/// storage.
-pub async fn handle_reload_config<Ctrl: ControlHal, W: Write + Unpin>(
-    control: &mut Ctrl,
-    socket: &mut W,
-) {
-    match control.reload_config().await {
-        Ok(()) => {
-            http::write_accepted(socket).await.ok();
-        }
-        Err(e) => {
-            http::write_hal_error(socket, &e).await.ok();
-        }
-    }
-}
