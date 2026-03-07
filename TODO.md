@@ -1,13 +1,5 @@
 # TODO — CocktailBotHAL
 
-## Dispense: Glass Presence Check
-
-Before dispatching a job to `DispenseHal::create_job`, the handler should verify
-that a glass is present (`SensorHal::glass_state().present == true`). Currently
-the check is skipped. Requires passing `SensorHal` (or a pre-fetched
-`GlassSensorState`) into `handle_create_job`.
-
-
 ---
 
 ## Blockers (project will not compile on target without these)
@@ -87,6 +79,14 @@ The following items have been implemented and are no longer open:
   `job_update` (last-known state) when a job disappears from `list_jobs()`.
   Keep-alive timer resets on terminal events. `API.yaml` `/events` description
   updated to document terminal event behavior.
+- **Glass-aware state machine (v0.6.0)** — `RobotState` is a data-carrying
+  tagged-union enum with `WaitingForGlass`, `Working`, `DrinkReady`, `Error`
+  variants carrying job context and timeout countdowns. `GlassWaitReason` and
+  `RecoveryAction` enums added. Glass detection is HAL-internal; server layer
+  no longer pre-checks glass presence. `JobState::Running` replaced by `Active`.
+  Cleaning handler gates on `Idle`/`Provisioning`, returns 409 otherwise.
+  `AdminConfig` gains `glass_wait_timeout_secs` (60s) and `drink_ready_timeout_secs`
+  (300s). `Capabilities` gains `has_cancel_button` and `has_power_button`.
 
 ---
 
