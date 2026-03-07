@@ -10,9 +10,9 @@
 4. `parallel: bool` — whether channels may dispense simultaneously
 
 The signature SHALL NOT include `require_glass`, `timeout`, `recipe`, `size_ml`,
-or `channel_map` parameters. Glass detection is a pre-condition enforced by the
-server layer before calling the HAL. Volume normalization is performed by the
-server and passed in as pre-computed `DispenseItem` values.
+or `channel_map` parameters. Glass detection is a HAL-internal pre-condition
+enforced by the job executor loop before dispensing begins. Volume normalization
+is performed by the server and passed in as pre-computed `DispenseItem` values.
 
 #### Scenario: create_job accepts four arguments
 - **WHEN** the server layer calls
@@ -84,10 +84,10 @@ carrying the human-readable, non-unique label supplied by the client at job crea
 ### Requirement: Queue flush on config mutation
 Any config mutation (`PATCH /config` or `POST /config/restore`) SHALL execute a
 pre-flight sequence before applying the change:
-1. Cancel all jobs in `Queued` state immediately. Each cancelled job SHALL emit a
-   `job_update` SSE event with `state: "cancelled"`.
-2. If a job is in `Running` state, wait for it to reach a terminal state
-   (`Done`, `Cancelled`, or `Error`) before proceeding.
+1. Cancel all jobs in `Queued` or `WaitingForGlass` state immediately. Each
+   cancelled job SHALL emit a `job_update` SSE event with `state: "cancelled"`.
+2. If a job is `Active` (in `Working` or `Error { recovery: PutGlassBack }`),
+   wait for it to reach a terminal state (`Done`, `Cancelled`, or `Error`) before proceeding.
 3. After pre-flight completes, apply the config change.
 
 The response body of the config mutation SHALL include a `cancelled_job_ids`
@@ -98,10 +98,10 @@ array listing the IDs of jobs that were cancelled by the pre-flight.
 - **THEN** all three jobs transition to `Cancelled`, their IDs appear in
   `cancelled_job_ids`, and the new config is applied after cancellation
 
-#### Scenario: Running job is awaited before config applies
-- **WHEN** `PATCH /config` is called while one job is `Running` and one is `Queued`
+#### Scenario: Active job is awaited before config applies
+- **WHEN** `PATCH /config` is called while one job is `Active` and one is `Queued`
 - **THEN** the queued job is cancelled immediately, the request waits for the
-  running job to finish, and the config is applied only after the running job is done
+  active job to finish, and the config is applied only after the active job is done
 
 #### Scenario: cancelled_job_ids is empty when queue is idle
 - **WHEN** `PATCH /config` is called with no jobs queued or running
@@ -111,3 +111,26 @@ array listing the IDs of jobs that were cancelled by the pre-flight.
 - **WHEN** the pre-flight cancels queued jobs
 - **THEN** a `job_update` SSE event is emitted for each cancelled job with
   `state: "cancelled"`
+
+### Requirement: JobState Active variant
+`JobState` SHALL define an `Active` variant that replaces `Running`. `Active`
+indicates the job is the current job — either in `Working`, `WaitingForGlass`,
+or recoverable `Error` state. Clients requiring detailed active-job information
+SHALL read it from `RobotState` (via `GET /status` or SSE), not from `JobState`.
+
+#### Scenario: Active job shows JobState::Active
+- **WHEN** a job is the current job being executed
+- **THEN** `DispenseHal::job_status(job_id)` returns `JobStatus { state: Active, .. }`
+
+#### Scenario: Running variant does not exist
+- **WHEN** `src/hal/mod.rs` is inspected
+- **THEN** `JobState::Running` is not defined
+
+### Requirement: Cleaning entry clears the job queue
+When `CleaningHal::start_cleaning()` is called, the HAL SHALL cancel all jobs
+in `Queued` or `WaitingForGlass` state before transitioning to `Cleaning` state.
+Jobs currently `Active` SHALL be cancelled immediately (dispensing is interrupted).
+
+#### Scenario: start_cleaning cancels all queued jobs
+- **WHEN** `start_cleaning()` is called with two queued and one active job
+- **THEN** all three jobs are cancelled and `RobotState::Cleaning` is entered
