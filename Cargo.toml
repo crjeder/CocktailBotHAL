@@ -4,6 +4,17 @@ version = "0.6.0"
 authors = ["crjeder <crjeder@gmail.com>"]
 edition = "2021"
 
+[lib]
+name = "cocktail_bot_hal"
+path = "src/lib.rs"
+
+[[example]]
+name = "dev"
+
+[[example]]
+name = "esp32"
+required-features = ["esp32"]
+
 [dependencies]
 embassy-executor = { version = "0.9", features = ["arch-spin", "executor-thread"] }
 static_cell = "2"

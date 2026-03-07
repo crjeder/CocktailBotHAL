@@ -1,8 +1,8 @@
-// src/esp32/cleaning.rs
+// examples/esp32/cleaning.rs
 //
 // ESP32 stub implementation of CleaningHal.
 
-use crate::hal::{CleaningHal, ErrorInfo};
+use cocktail_bot_hal::hal::{CleaningHal, ErrorInfo};
 
 /// Stub implementation of [`CleaningHal`] for ESP32.
 pub struct Esp32Cleaning;

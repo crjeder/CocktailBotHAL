@@ -1,4 +1,4 @@
-// src/storage/ram.rs
+// examples/dev/storage.rs
 //
 // RAM-backed StorageHal implementation for development and testing.
 //
@@ -9,7 +9,9 @@
 use alloc::string::String;
 use alloc::vec;
 
-use crate::hal::{crc32_hex, AdminConfig, BackupPayload, ErrorInfo, GlassType, StorageHal};
+use cocktail_bot_hal::hal::{
+    crc32_hex, AdminConfig, BackupPayload, ErrorInfo, GlassType, StorageHal,
+};
 
 /// RAM-backed implementation of [`StorageHal`].
 ///

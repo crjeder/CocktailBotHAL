@@ -1,11 +1,11 @@
-// src/esp32/storage.rs
+// examples/esp32/storage.rs
 //
 // ESP32 stub implementation of StorageHal.
 // NVS flash access is not yet implemented.
 
 use alloc::string::String;
 
-use crate::hal::{AdminConfig, BackupPayload, ErrorInfo, StorageHal};
+use cocktail_bot_hal::hal::{AdminConfig, BackupPayload, ErrorInfo, StorageHal};
 
 /// Stub implementation of [`StorageHal`] for ESP32.
 pub struct Esp32Storage;

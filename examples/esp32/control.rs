@@ -1,9 +1,9 @@
-// src/esp32/control.rs
+// examples/esp32/control.rs
 //
 // ESP32 stub implementation of ControlHal.
 // All methods are placeholders — see TODO comments for hardware wiring points.
 
-use crate::hal::{ControlHal, ErrorInfo};
+use cocktail_bot_hal::hal::{ControlHal, ErrorInfo};
 
 /// Stub implementation of [`ControlHal`] for ESP32.
 pub struct Esp32Control;

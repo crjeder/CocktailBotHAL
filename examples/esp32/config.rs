@@ -1,11 +1,11 @@
-// src/esp32/config.rs
+// examples/esp32/config.rs
 //
 // ESP32 stub implementation of ConfigHal.
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::hal::{
+use cocktail_bot_hal::hal::{
     AdminConfig, Capabilities, ConfigHal, ErrorInfo, GlassType, LevelReporting, RobotConfig,
 };
 

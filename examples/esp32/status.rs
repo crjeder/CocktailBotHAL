@@ -1,10 +1,10 @@
-// src/esp32/status.rs
+// examples/esp32/status.rs
 //
 // ESP32 stub implementation of StatusHal.
 
 use alloc::vec::Vec;
 
-use crate::hal::{ErrorInfo, RobotState, StatusHal};
+use cocktail_bot_hal::hal::{ErrorInfo, RobotState, StatusHal};
 
 /// Stub implementation of [`StatusHal`] for ESP32.
 pub struct Esp32Status;

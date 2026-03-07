@@ -1,10 +1,10 @@
-// src/esp32/sensors.rs
+// examples/esp32/sensors.rs
 //
 // ESP32 stub implementation of SensorHal.
 
 use alloc::vec::Vec;
 
-use crate::hal::{ErrorInfo, GlassSensorState, LevelState, SensorHal};
+use cocktail_bot_hal::hal::{ErrorInfo, GlassSensorState, LevelState, SensorHal};
 
 /// Stub implementation of [`SensorHal`] for ESP32.
 pub struct Esp32Sensors;

@@ -23,6 +23,7 @@ for full tech stack, architecture, and code conventions.
 2. Update `claude-progress.txt`
 3. Document relevant changes in `CLAUDE.md` and `openspec/config.yaml`
 4. Update `TODO.md` to reflect the changes
+5. Document changes in CHANGELOG.md in the format of @https://keepachangelog.com/en/1.1.0/
 
 ---
 
@@ -31,9 +32,23 @@ for full tech stack, architecture, and code conventions.
 ```
 CocktailBotHAL/
 ├── src/
-│   ├── main.rs          # Placeholder entry point (sync stub; see TODO for async BSP pattern)
+│   ├── lib.rs           # Library crate root (pub mod hal, pub mod server)
 │   ├── hal/mod.rs       # Core HAL trait definitions and data types
 │   └── server/mod.rs    # Async HTTP server (embassy-net)
+├── examples/
+│   ├── dev/             # Host development example (spin executor + stubs)
+│   │   ├── main.rs      # Entry point; all stub HAL impls + executor setup
+│   │   └── storage.rs   # RamStorageHal (dev-only, RAM-backed StorageHal)
+│   └── esp32/           # ESP32 reference implementation
+│       ├── main.rs      # Entry point; wires sub-structs into ApiServer
+│       ├── control.rs   # Esp32Control (ControlHal stub)
+│       ├── status.rs    # Esp32Status (StatusHal stub)
+│       ├── config.rs    # Esp32Config (ConfigHal stub)
+│       ├── storage.rs   # Esp32Storage (StorageHal stub, NOT_IMPLEMENTED)
+│       ├── sensors.rs   # Esp32Sensors (SensorHal stub)
+│       ├── dispense.rs  # Esp32Dispense (DispenseHal stub)
+│       ├── cleaning.rs  # Esp32Cleaning (CleaningHal stub)
+│       └── hasher.rs    # Esp32PasswordHasher (PBKDF2-HMAC-SHA256)
 ├── openspec/
 │   ├── config.yaml      # OpenSpec config — project context for AI spec generation
 │   └── specs/           # Living specs
@@ -48,12 +63,13 @@ CocktailBotHAL/
 
 ```bash
 cargo check
-cargo build          # Debug build
-cargo run            # Starts on port 8000
+cargo build                          # Debug build (library only)
+cargo run --example dev              # Run development server (port 8000)
+cargo build --example esp32 --features esp32   # Build ESP32 example
+cargo test                           # Run all tests (library only)
 ```
 
 No Makefile or Docker. Standard Cargo only.
-`generic_cocktail` must be present at `../generic-cocktail` or the build will fail.
 
 ---
 
@@ -61,12 +77,15 @@ No Makefile or Docker. Standard Cargo only.
 
 - **Do not break the HAL trait interface** (`src/hal/mod.rs`). It is the
   public contract for hardware implementors.
-- **`main.rs` is the only binary entry point** — `api/mod.rs` no longer exists.
-  For ESP32 bring-up, replace `fn main()` with `#[esp_hal::main]` async entry point
-  (see TODO comment in `src/main.rs`).
+- **`src/lib.rs` is the crate root** — the library exports `hal` and `server`
+  only. No concrete HAL implementations live in `src/`.
+- **Examples are not part of the library** — `examples/dev/` and `examples/esp32/`
+  are Cargo examples, compiled separately. Changes there do not affect `cargo test`.
+- **ESP32 bring-up**: replace `examples/esp32/main.rs` spin executor with
+  `#[esp_hal::main]` and wire to esp-hal-embassy + esp-wifi.
 - **Cargo.lock is gitignored** — do not add it.
 - **No `.env` files** — all config is hardcoded or loaded via HAL traits at runtime.
-- **ESP32 code** (`src/esp32/`) must use only `core` and `alloc` — no `std` imports.
+- **ESP32 example code** must use only `core` and `alloc` — no `std` imports.
 - Before adding any dependency, check commented-out entries in `Cargo.toml` first.
 - Run `cargo fmt` before every commit.
 - Keep **API.yaml** up-to date

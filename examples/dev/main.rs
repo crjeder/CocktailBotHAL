@@ -1,49 +1,36 @@
-// src/main.rs
+// examples/dev/main.rs
 //
-// Placeholder entry point for CocktailBotHAL.
+// Development entry point for CocktailBotHAL.
 //
-// TODO: Replace this file with a hardware-specific entry point targeting
-// your MCU (STM32, ESP32, RP2040, etc.). See TODO.md for the full list of
-// open work, including the required Cargo.toml dependencies.
-
-// HAL traits and types are a public API for hardware vendors; they will not
-// all be referenced from within the crate itself.
-#![allow(dead_code)]
+// Runs the embassy spin executor on the host with stub HAL implementations.
+// Demonstrates how to wire ApiServer with all HAL traits.
+//
+// For ESP32 bring-up, see examples/esp32/main.rs.
 
 extern crate alloc;
 
-#[cfg(feature = "esp32")]
-mod esp32;
-mod hal;
-#[cfg(not(test))]
-mod server;
-#[cfg(test)]
-#[allow(unused)]
-mod server;
 mod storage;
 
+use alloc::format;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
-use storage::RamStorageHal;
 
-#[cfg(not(test))]
-use embassy_executor::{Executor, Spawner};
-use hal::{
+use cocktail_bot_hal::hal::{
     AdminConfig, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal, DispenseItem,
     ErrorInfo, GlassSensorState, GlassType, JobCreated, JobStatus, LevelReporting, LevelState,
     LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal,
 };
-#[cfg(not(test))]
-use server::{ApiServer, RobotHal};
-#[cfg(not(test))]
+use cocktail_bot_hal::server::{ApiServer, RobotHal};
+use embassy_executor::{Executor, Spawner};
 use static_cell::StaticCell;
+use storage::RamStorageHal;
 
 // ============================================================================
 // Stub HAL implementations
 //
-// TODO: Replace each stub with a real hardware driver implementing the
-// corresponding trait from src/hal/mod.rs.
+// Replace each stub with a real hardware driver implementing the corresponding
+// trait from cocktail_bot_hal::hal.
 // ============================================================================
 
 struct StubControlHal;
@@ -52,9 +39,11 @@ impl ControlHal for StubControlHal {
     async fn power(&mut self, _on: bool) -> Result<(), ErrorInfo> {
         todo!()
     }
+
     async fn power_save(&mut self, _enabled: bool) -> Result<(), ErrorInfo> {
         todo!()
     }
+
     async fn reset_errors(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
@@ -64,8 +53,9 @@ struct StubStatusHal;
 
 impl StatusHal for StubStatusHal {
     async fn state(&self) -> RobotState {
-        RobotState::Off
+        RobotState::Idle
     }
+
     async fn active_errors(&self) -> Vec<ErrorInfo> {
         vec![]
     }
@@ -111,6 +101,7 @@ impl ConfigHal for StubConfigHal {
             drink_ready_timeout_secs: 300,
         }
     }
+
     async fn update_active_config(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {
         todo!()
     }
@@ -122,6 +113,7 @@ impl SensorHal for StubSensorHal {
     async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
         todo!()
     }
+
     async fn level_state(&self) -> Result<Vec<LevelState>, ErrorInfo> {
         todo!()
     }
@@ -142,12 +134,20 @@ impl DispenseHal for StubDispenseHal {
             queue_position: 1,
         })
     }
+
     async fn list_jobs(&self) -> Vec<JobStatus> {
         vec![]
     }
-    async fn job_status(&self, _job_id: &str) -> Result<JobStatus, ErrorInfo> {
-        todo!()
+
+    async fn job_status(&self, job_id: &str) -> Result<JobStatus, ErrorInfo> {
+        Err(ErrorInfo {
+            code: String::from("NOT_FOUND"),
+            message: format!("Job '{}' not found (stub)", job_id),
+            hint: None,
+            recoverable: true,
+        })
     }
+
     async fn cancel_job(&mut self, _job_id: &str) -> Result<(), ErrorInfo> {
         todo!()
     }
@@ -159,6 +159,7 @@ impl CleaningHal for StubCleaningHal {
     async fn start_cleaning(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
+
     async fn stop_cleaning(&mut self) -> Result<(), ErrorInfo> {
         todo!()
     }
@@ -167,16 +168,16 @@ impl CleaningHal for StubCleaningHal {
 /// Development-only password hasher.
 ///
 /// Stores passwords in the format `stub$<plaintext>` and verifies them with
-/// a constant-time comparison.  Do NOT use in production.
+/// a constant-time comparison. Do NOT use in production.
 struct StubPasswordHasher;
 
 impl PasswordHasher for StubPasswordHasher {
     fn hash(&self, password: &str) -> Result<String, ErrorInfo> {
-        Ok(alloc::format!("stub${}", password))
+        Ok(format!("stub${}", password))
     }
 
     fn verify(&self, password: &str, stored_hash: &str) -> bool {
-        let expected = alloc::format!("stub${}", password);
+        let expected = format!("stub${}", password);
         let a = expected.as_bytes();
         let b = stored_hash.as_bytes();
         if a.len() != b.len() {
@@ -196,67 +197,33 @@ impl PasswordHasher for StubPasswordHasher {
 // Runs the embassy spin executor for host/development builds.
 // Constructs all stub HAL instances and creates ApiServer + SseServer.
 //
-// TODO (ESP32 bring-up): Replace this entire section with the BSP-provided
-// async entry point using esp-hal:
-//
-//   #[esp_hal::main]
-//   async fn main(spawner: embassy_executor::Spawner) {
-//       let peripherals = esp_hal::init(esp_hal::Config::default());
-//       esp_hal_embassy::init(/* timer */);
-//       // initialise embassy-net stack with esp-wifi ...
-//       let net_stack = /* ... */;
-//       spawner
-//           .spawn(sse_task(
-//               SSE_STATUS.init(/* real StatusHal */),
-//               SSE_DISPENSE.init(/* real DispenseHal */),
-//               net_stack,
-//           ))
-//           .unwrap();
-//       ApiServer { hal: RobotHal { /* real drivers */ } }
-//           .run(net_stack)
-//           .await;
-//   }
-//
-// NOTE: #[embassy_executor::main] is unavailable with arch-spin.
-// The spin executor is initialised manually below.
+// TODO (ESP32 bring-up): see examples/esp32/main.rs for the BSP entry point
+// using #[esp_hal::main].
 // ============================================================================
 
 /// Static storage for the StatusHal instance used by the SSE server.
-///
-/// Kept separate from the ApiServer's HAL so SseServer can hold a `'static`
-/// reference without requiring a `Mutex` for its read-only access pattern.
-#[cfg(not(test))]
 static SSE_STATUS: StaticCell<StubStatusHal> = StaticCell::new();
 
 /// Static storage for the DispenseHal instance used by the SSE server (read
 /// path only — job listing for change detection).
-#[cfg(not(test))]
 static SSE_DISPENSE: StaticCell<StubDispenseHal> = StaticCell::new();
 
-#[cfg(not(test))]
 static EXECUTOR: StaticCell<Executor> = StaticCell::new();
 
-/// SSE server task — streams robot state and job updates to the display client
-/// on port 9000 (single connection at a time).
+/// SSE server task — streams robot state and job updates to the display client.
 ///
 /// In a real bring-up, wire `net_stack` from esp-hal-embassy and call:
-///   server::sse::SseServer { status, dispense }.run(net_stack).await;
-#[cfg(not(test))]
+///   cocktail_bot_hal::server::sse::SseServer { status, dispense }.run(net_stack).await;
 #[embassy_executor::task]
 async fn sse_task(status: &'static StubStatusHal, dispense: &'static StubDispenseHal) {
     // Real call (requires embassy-net stack):
-    //   server::sse::SseServer { status, dispense }.run(net_stack).await;
+    //   cocktail_bot_hal::server::sse::SseServer { status, dispense }.run(net_stack).await;
     let _ = (status, dispense);
 }
 
 /// Async stub entry task — constructs all HAL stubs and the API server.
-///
-/// In a real bring-up this function is replaced by the BSP entry point and
-/// wired to actual hardware drivers and a live embassy-net stack.
-#[cfg(not(test))]
 #[embassy_executor::task]
 async fn async_main(spawner: Spawner) {
-    // Initialise static HAL instances for the SSE read path.
     let sse_status = SSE_STATUS.init(StubStatusHal);
     let sse_dispense = SSE_DISPENSE.init(StubDispenseHal);
     spawner.spawn(sse_task(sse_status, sse_dispense)).unwrap();
@@ -276,22 +243,9 @@ async fn async_main(spawner: Spawner) {
     // Real call: _server.run(net_stack).await — wire to embassy-net stack.
 }
 
-#[cfg(not(test))]
 fn main() {
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
         spawner.spawn(async_main(spawner)).unwrap();
     });
 }
-
-// Provide no-op embassy-time driver symbols so the server module can link
-// in test builds without a real hardware timer.
-#[cfg(test)]
-#[no_mangle]
-fn _embassy_time_now() -> u64 {
-    0
-}
-
-#[cfg(test)]
-#[no_mangle]
-fn _embassy_time_schedule_wake(_at: u64, _waker: &core::task::Waker) {}

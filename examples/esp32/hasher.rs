@@ -1,4 +1,4 @@
-// src/esp32/hasher.rs
+// examples/esp32/hasher.rs
 //
 // Password hasher for ESP32 using PBKDF2-HMAC-SHA256.
 //
@@ -18,7 +18,7 @@ use core::sync::atomic::{AtomicU32, Ordering};
 use pbkdf2::pbkdf2_hmac;
 use sha2::Sha256;
 
-use crate::hal::{ErrorInfo, PasswordHasher};
+use cocktail_bot_hal::hal::{ErrorInfo, PasswordHasher};
 
 const ITERATIONS: u32 = 10_000;
 const DK_LEN: usize = 32;

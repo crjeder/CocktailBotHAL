@@ -1,11 +1,11 @@
-// src/esp32/dispense.rs
+// examples/esp32/dispense.rs
 //
 // ESP32 stub implementation of DispenseHal.
 
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::hal::{DispenseHal, DispenseItem, ErrorInfo, JobCreated, JobStatus};
+use cocktail_bot_hal::hal::{DispenseHal, DispenseItem, ErrorInfo, JobCreated, JobStatus};
 
 /// Stub implementation of [`DispenseHal`] for ESP32.
 pub struct Esp32Dispense;
