@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo tree -p embassy-net)"
+      "Bash(cargo tree -p embassy-net)",
+      "Bash(mkdir -p openspec/changes/archive)",
+      "Bash(mv openspec/changes/glass-presence-check openspec/changes/archive/2026-03-07-glass-presence-check)",
+      "WebFetch(domain:www.makeareadme.com)"
     ]
   }
 }

@@ -16,7 +16,6 @@ name = "esp32"
 required-features = ["esp32"]
 
 [dependencies]
-embassy-executor = { version = "0.9", features = ["arch-spin", "executor-thread"] }
 static_cell = "2"
 embassy-net = { version = "0.8.0", features = ["tcp", "proto-ipv4", "medium-ethernet"] }
 embassy-time = "0.5.0"
@@ -26,9 +25,34 @@ serde_json = "1.0"   # serialize json for drink recepies
 base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 sha2 = { version = "0.10", default-features = false, optional = true }
 pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"], optional = true }
+# ESP32 cross-compilation deps.
+# Requires: --features esp32 --target xtensa-esp32s3-none-elf (or riscv32imc-unknown-none-elf)
+# Toolchain: cargo install espup && espup install
+# Version note: pin these to versions that match the embassy-executor/net/time versions
+# above. Check https://github.com/esp-rs/esp-hal for the compatibility matrix.
+esp-hal = { version = "0.23", optional = true }
+esp-hal-embassy = { version = "0.6", optional = true }
+esp-wifi = { version = "0.12", optional = true }
+esp-alloc = { version = "0.5", optional = true }
 
 [features]
-esp32 = ["dep:sha2", "dep:pbkdf2"]
+esp32 = [
+    "dep:sha2",
+    "dep:pbkdf2",
+    "dep:esp-hal",
+    "dep:esp-hal-embassy",
+    "dep:esp-wifi",
+    "dep:esp-alloc",
+]
+
+# embassy-executor is split by target to avoid arch-feature conflicts:
+#   host (dev example, cargo test): arch-spin + executor-thread for the spin executor
+#   xtensa / riscv32 (ESP32 cross-compile): no arch-spin; executor provided by esp-hal-embassy
+[target.'cfg(not(any(target_arch = "xtensa", target_arch = "riscv32")))'.dependencies]
+embassy-executor = { version = "0.9", features = ["arch-spin", "executor-thread"] }
+
+[target.'cfg(any(target_arch = "xtensa", target_arch = "riscv32"))'.dependencies]
+embassy-executor = { version = "0.9" }
 
 [dev-dependencies]
 test-case = "3.2"

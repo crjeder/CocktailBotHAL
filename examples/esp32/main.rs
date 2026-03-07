@@ -2,26 +2,29 @@
 //
 // ESP32 reference entry point for CocktailBotHAL.
 //
-// This example demonstrates how to wire all HAL trait implementations into
-// ApiServer for an ESP32 target. All sub-modules are stub implementations
-// with TODO comments marking hardware wiring points.
+// CROSS-COMPILATION REQUIRED
+// This file uses #[esp_hal::main] and can only be built for an ESP32 target:
 //
-// TODO (ESP32 bring-up): Replace the spin executor below with:
+//   Xtensa (ESP32, ESP32-S2, ESP32-S3):
+//     cargo build --example esp32 --features esp32 \
+//       --target xtensa-esp32s3-none-elf
 //
-//   #[esp_hal::main]
-//   async fn main(spawner: embassy_executor::Spawner) {
-//       let peripherals = esp_hal::init(esp_hal::Config::default());
-//       esp_hal_embassy::init(/* timer */);
-//       // initialise embassy-net stack with esp-wifi ...
-//       let net_stack = /* ... */;
-//       spawner.spawn(sse_task(/* ... */)).unwrap();
-//       ApiServer { hal: RobotHal { /* real drivers */ } }
-//           .run(net_stack)
-//           .await;
-//   }
+//   RISC-V (ESP32-C3, C6, H2):
+//     cargo build --example esp32 --features esp32 \
+//       --target riscv32imc-unknown-none-elf
 //
-// Required Cargo.toml additions for real ESP32 bringup:
-//   esp-hal, esp-hal-embassy, esp-wifi, esp-alloc
+// Install the toolchain first:
+//   cargo install espup && espup install
+//
+// Note: the library currently depends on `serde_json` which links against `std`.
+// For a bare-metal no_std ESP32 build, replace `serde_json` with
+// `serde-json-core`, or enable serde_json's alloc feature in Cargo.toml:
+//   serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+//
+// All hardware-specific bindings are marked with todo!() and must be
+// completed for actual hardware bring-up.
+#![no_std]
+#![no_main]
 
 extern crate alloc;
 
@@ -34,42 +37,81 @@ mod sensors;
 mod status;
 mod storage;
 
-use alloc::vec::Vec;
-
 use cleaning::Esp32Cleaning;
-use cocktail_bot_hal::hal::{ErrorInfo, RobotState};
 use cocktail_bot_hal::server::{ApiServer, RobotHal};
 use config::Esp32Config;
 use control::Esp32Control;
 use dispense::Esp32Dispense;
-use embassy_executor::{Executor, Spawner};
+use embassy_executor::Spawner;
 use hasher::Esp32PasswordHasher;
 use sensors::Esp32Sensors;
 use static_cell::StaticCell;
 use status::Esp32Status;
 use storage::Esp32Storage;
 
-// Static instances for the SSE read path.
+// Heap allocator — must appear at module level before any heap allocation.
+// Adjust the size for the RAM available on your chip variant.
+esp_alloc::heap_allocator!(72 * 1024);
+
+// Static instances for the SSE read path (require 'static lifetime for tasks).
 static SSE_STATUS: StaticCell<Esp32Status> = StaticCell::new();
 static SSE_DISPENSE: StaticCell<Esp32Dispense> = StaticCell::new();
-static EXECUTOR: StaticCell<Executor> = StaticCell::new();
 
-/// SSE server task.
+/// SSE server task — streams robot state and job updates to display clients.
 ///
-/// TODO: wire `net_stack` from esp-hal-embassy and call:
-///   cocktail_bot_hal::server::sse::SseServer { status, dispense }.run(net_stack).await;
+/// TODO: add a `net_stack` parameter (embassy-net `Stack`) and replace the
+/// body with:
+///   cocktail_bot_hal::server::sse::SseServer { status, dispense }
+///       .run(net_stack)
+///       .await;
 #[embassy_executor::task]
 async fn sse_task(status: &'static Esp32Status, dispense: &'static Esp32Dispense) {
     let _ = (status, dispense);
 }
 
-#[embassy_executor::task]
-async fn async_main(spawner: Spawner) {
+/// Main async entry point — provided by esp-hal.
+///
+/// esp-hal initialises chip peripherals and passes a `Spawner` here.
+/// Embassy tasks are spawned; the executor runs until reset or panic.
+#[esp_hal::main]
+async fn main(spawner: Spawner) {
+    // 1. Initialise esp-hal (clocks, GPIO, watchdog, etc.).
+    let peripherals = esp_hal::init(esp_hal::Config::default());
+
+    // 2. Initialise the embassy timer for async task scheduling.
+    //    Uncomment the correct block for your chip variant.
+    //
+    //    Classic ESP32 / ESP32-S2 — timer group (TIMG):
+    //      let timg0 =
+    //          esp_hal::timer::timg::TimerGroup::new(peripherals.TIMG0);
+    //      esp_hal_embassy::init(timg0.timer0);
+    //
+    //    ESP32-S3, C3, C6, H2 — system timer (preferred):
+    //      let systimer =
+    //          esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
+    //      esp_hal_embassy::init(systimer.alarm0.into_periodic());
+    //
+    todo!("uncomment and complete the embassy timer init block for your chip");
+
+    // 3. Initialise Wi-Fi and build the embassy-net Stack.
+    //    See https://github.com/esp-rs/esp-wifi for full setup examples.
+    //    Sketch:
+    //      let init = esp_wifi::init(..., peripherals.RADIO_CLK, &clocks)?;
+    //      let (wifi_iface, controller) =
+    //          esp_wifi::wifi::new_with_mode(&init, peripherals.WIFI, WifiStaDevice)?;
+    //      let config = embassy_net::Config::dhcpv4(Default::default());
+    //      let net_stack = embassy_net::Stack::new(wifi_iface, config, ...);
+    //
+    todo!("initialise esp-wifi and create the embassy-net Stack");
+
+    // 4. Spawn the SSE server task.
     let sse_status = SSE_STATUS.init(Esp32Status::new());
     let sse_dispense = SSE_DISPENSE.init(Esp32Dispense::new());
     spawner.spawn(sse_task(sse_status, sse_dispense)).unwrap();
 
-    let _server = ApiServer {
+    // 5. Build and run the REST API server.
+    //    Replace todo!() in .run() with the embassy-net Stack from step 3.
+    let mut server = ApiServer {
         hal: RobotHal {
             control: Esp32Control::new(),
             status: Esp32Status::new(),
@@ -81,12 +123,7 @@ async fn async_main(spawner: Spawner) {
             hasher: Esp32PasswordHasher,
         },
     };
-    // TODO: _server.run(net_stack).await — wire to embassy-net stack.
-}
-
-fn main() {
-    let executor = EXECUTOR.init(Executor::new());
-    executor.run(|spawner| {
-        spawner.spawn(async_main(spawner)).unwrap();
-    });
+    server
+        .run(todo!("pass the embassy-net Stack from step 3"))
+        .await;
 }

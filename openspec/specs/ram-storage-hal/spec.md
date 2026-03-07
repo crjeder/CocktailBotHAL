@@ -1,9 +1,11 @@
 ### Requirement: RamStorageHal implements StorageHal
 `RamStorageHal` SHALL implement the `StorageHal` trait and be usable as a drop-in
 replacement for any `Stor: StorageHal` generic parameter without requiring `std`.
+`RamStorageHal` SHALL live in `examples/dev/` and SHALL NOT be exported from the
+library crate. It is a development-only implementation.
 
 #### Scenario: RamStorageHal satisfies StorageHal bound
-- **WHEN** `RamStorageHal` is used as the `Stor` generic in `ApiServer`
+- **WHEN** `RamStorageHal` is used as the `Stor` generic in `ApiServer` within the dev example
 - **THEN** the code compiles without `std` imports
 
 ### Requirement: backup returns error on empty store
@@ -34,7 +36,7 @@ and include it as `payload.checksum`.
 ### Requirement: new() pre-seeds a default config
 `RamStorageHal::new()` SHALL initialise the store with a default `AdminConfig`
 containing `token: "dev"`, an empty `liquids` list, a minimal `glass_types` list,
-`max_total_parts: 100`, and `admin_password: ""`. This allows development builds
+and `admin_password: ""`. This allows development builds
 to boot into `Idle` state without a provisioning step.
 
 #### Scenario: new() makes backup succeed immediately

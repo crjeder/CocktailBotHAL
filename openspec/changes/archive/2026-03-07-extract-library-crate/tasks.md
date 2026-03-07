@@ -33,4 +33,4 @@
 - [x] 6.1 Run `cargo fmt`
 - [x] 6.2 Update `CLAUDE.md`: revise repository structure section; change `cargo run` to `cargo run --example dev`; remove esp32 from `src/`; note `examples/` directory
 - [x] 6.3 Update `claude-progress.txt`
-- [ ] 6.4 Commit with message `refactor: extract library crate, move impls to examples/`
+- [x] 6.4 Commit with message `refactor: extract library crate, move impls to examples/`
