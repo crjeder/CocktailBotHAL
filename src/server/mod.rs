@@ -237,7 +237,8 @@ impl<
 
             // ----- cleaning -----
             ("POST", "/v1/cleaning/start") => {
-                handlers::cleaning::handle_start(&mut self.hal.cleaning, socket).await;
+                handlers::cleaning::handle_start(&self.hal.status, &mut self.hal.cleaning, socket)
+                    .await;
             }
             ("POST", "/v1/cleaning/stop") => {
                 handlers::cleaning::handle_stop(&mut self.hal.cleaning, socket).await;

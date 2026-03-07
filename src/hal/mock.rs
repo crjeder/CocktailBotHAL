@@ -16,10 +16,10 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::hal::{
-    AdminConfig, BackupPayload, CleaningHal, ConfigHal, ControlHal, DispenseHal, DispenseItem,
-    ErrorInfo, GlassSensorState, GlassType, JobCreated, JobState, JobStatus, LevelReporting,
-    LevelState, LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState,
-    SensorHal, StatusHal, StorageHal,
+    AdminConfig, BackupPayload, Capabilities, CleaningHal, ConfigHal, ControlHal, DispenseHal,
+    DispenseItem, ErrorInfo, GlassSensorState, GlassType, JobCreated, JobState, JobStatus,
+    LevelReporting, LevelState, LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig,
+    RobotState, SensorHal, StatusHal, StorageHal,
 };
 
 // ============================================================================
@@ -191,6 +191,8 @@ impl ConfigHal for MockConfigHal {
         self.config.glass_types = cfg.glass_types;
         self.config.token = cfg.token;
         self.config.admin_password = cfg.admin_password;
+        self.config.glass_wait_timeout_secs = cfg.glass_wait_timeout_secs;
+        self.config.drink_ready_timeout_secs = cfg.drink_ready_timeout_secs;
         Ok(())
     }
 }
@@ -462,7 +464,6 @@ pub fn test_error() -> ErrorInfo {
 }
 
 pub fn test_robot_config() -> RobotConfig {
-    use crate::hal::Capabilities;
     RobotConfig {
         liquids: alloc::vec![LiquidConfig {
             id: "vodka".to_string(),
@@ -480,9 +481,13 @@ pub fn test_robot_config() -> RobotConfig {
             glass_typing: false,
             simultaneous_channels: 2,
             max_queue_depth: 4,
+            has_cancel_button: false,
+            has_power_button: false,
         },
         token: String::new(),
         admin_password: String::new(),
+        glass_wait_timeout_secs: 60,
+        drink_ready_timeout_secs: 300,
     }
 }
 
@@ -500,5 +505,7 @@ pub fn test_admin_config() -> AdminConfig {
         }],
         token: String::new(),
         admin_password: String::new(),
+        glass_wait_timeout_secs: 60,
+        drink_ready_timeout_secs: 300,
     }
 }

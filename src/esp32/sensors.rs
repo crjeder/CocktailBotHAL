@@ -18,8 +18,10 @@ impl Esp32Sensors {
 impl SensorHal for Esp32Sensors {
     async fn glass_state(&self) -> Result<GlassSensorState, ErrorInfo> {
         // TODO: wire to hardware — read capacitive / IR glass sensor
+        // Optimistic default: no sensor wired → assume glass is present.
+        // confidence: 0.0 signals this is not a real hardware reading.
         Ok(GlassSensorState {
-            present: false,
+            present: true,
             glass_type: None,
             confidence: 0.0,
         })

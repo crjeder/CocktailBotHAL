@@ -37,7 +37,7 @@ pub async fn flush_queue_and_wait<Disp: DispenseHal>(
     // Wait for any running job to reach a terminal state.
     loop {
         let jobs = dispense.list_jobs().await;
-        if !jobs.iter().any(|j| matches!(j.state, JobState::Running)) {
+        if !jobs.iter().any(|j| matches!(j.state, JobState::Active)) {
             break;
         }
         Timer::after(Duration::from_millis(50)).await;

@@ -102,9 +102,13 @@ impl ConfigHal for StubConfigHal {
                 glass_typing: false,
                 simultaneous_channels: 1,
                 max_queue_depth: 5,
+                has_cancel_button: false,
+                has_power_button: false,
             },
             token: String::new(),
             admin_password: String::new(),
+            glass_wait_timeout_secs: 60,
+            drink_ready_timeout_secs: 300,
         }
     }
     async fn update_active_config(&mut self, _cfg: AdminConfig) -> Result<(), ErrorInfo> {

@@ -47,6 +47,8 @@ impl RamStorageHal {
                 },
             ],
             admin_password: String::new(),
+            glass_wait_timeout_secs: 60,
+            drink_ready_timeout_secs: 300,
         };
         RamStorageHal {
             stored: Some(defaults),

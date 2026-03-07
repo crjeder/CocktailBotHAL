@@ -25,6 +25,8 @@ fn stub_capabilities() -> Capabilities {
         glass_typing: false,
         simultaneous_channels: 1,
         max_queue_depth: 5,
+        has_cancel_button: false,
+        has_power_button: false,
     }
 }
 
@@ -47,6 +49,8 @@ fn default_admin_config() -> AdminConfig {
         ],
         token: String::new(),
         admin_password: String::new(),
+        glass_wait_timeout_secs: 60,
+        drink_ready_timeout_secs: 300,
     }
 }
 
@@ -60,6 +64,8 @@ impl ConfigHal for Esp32Config {
             capabilities: stub_capabilities(),
             token: admin.token,
             admin_password: admin.admin_password,
+            glass_wait_timeout_secs: admin.glass_wait_timeout_secs,
+            drink_ready_timeout_secs: admin.drink_ready_timeout_secs,
         }
     }
 

@@ -115,17 +115,29 @@ fn status_returns_configured_errors() {
     });
 }
 
-#[test_case(RobotState::Off ; "off")]
-#[test_case(RobotState::SelfTest ; "self_test")]
-#[test_case(RobotState::Idle ; "idle")]
-#[test_case(RobotState::Prepared ; "prepared")]
-#[test_case(RobotState::Working ; "working")]
-#[test_case(RobotState::Cleaning ; "cleaning")]
-#[test_case(RobotState::DrinkReady ; "drink_ready")]
-#[test_case(RobotState::Error ; "error")]
-#[test_case(RobotState::Provisioning ; "provisioning")]
-fn status_state_roundtrip(state: RobotState) {
+#[test]
+fn status_state_roundtrip_unit_variants() {
     block_on(async {
+        for state in [
+            RobotState::Off,
+            RobotState::SelfTest,
+            RobotState::Idle,
+            RobotState::Cleaning,
+            RobotState::Provisioning,
+        ] {
+            let hal = MockStatusHal::new().with_state(state.clone());
+            assert_eq!(hal.state().await, state);
+        }
+    });
+}
+
+#[test]
+fn status_state_roundtrip_working() {
+    block_on(async {
+        let state = RobotState::Working {
+            job_id: "j1".to_string(),
+            progress_pct: 42,
+        };
         let hal = MockStatusHal::new().with_state(state.clone());
         assert_eq!(hal.state().await, state);
     });
@@ -555,24 +567,75 @@ fn cleaning_restart_after_stop() {
 // Serialization Tests
 // ============================================================================
 
-#[test_case(RobotState::Off, "\"off\"" ; "off")]
-#[test_case(RobotState::SelfTest, "\"self_test\"" ; "self_test")]
-#[test_case(RobotState::Idle, "\"idle\"" ; "idle")]
-#[test_case(RobotState::Prepared, "\"prepared\"" ; "prepared")]
-#[test_case(RobotState::Working, "\"working\"" ; "working")]
-#[test_case(RobotState::Cleaning, "\"cleaning\"" ; "cleaning")]
-#[test_case(RobotState::DrinkReady, "\"drink_ready\"" ; "drink_ready")]
-#[test_case(RobotState::Error, "\"error\"" ; "error")]
-#[test_case(RobotState::Provisioning, "\"provisioning\"" ; "provisioning")]
-fn robot_state_serializes(state: RobotState, expected: &str) {
-    let json = serde_json::to_string(&state).unwrap();
-    assert_eq!(json, expected);
-    let parsed: RobotState = serde_json::from_str(&json).unwrap();
-    assert_eq!(parsed, state);
+/// Unit variants serialize as `{"state":"<name>"}` (tagged union).
+#[test_case(RobotState::Off, "off" ; "off")]
+#[test_case(RobotState::SelfTest, "self_test" ; "self_test")]
+#[test_case(RobotState::Idle, "idle" ; "idle")]
+#[test_case(RobotState::Cleaning, "cleaning" ; "cleaning")]
+#[test_case(RobotState::Provisioning, "provisioning" ; "provisioning")]
+fn robot_state_unit_variant_serializes(state: RobotState, tag: &str) {
+    let val: serde_json::Value = serde_json::to_value(&state).unwrap();
+    assert_eq!(val["state"], tag);
+}
+
+#[test]
+fn robot_state_working_serializes() {
+    let state = RobotState::Working {
+        job_id: "j1".to_string(),
+        progress_pct: 75,
+    };
+    let val: serde_json::Value = serde_json::to_value(&state).unwrap();
+    assert_eq!(val["state"], "working");
+    assert_eq!(val["job_id"], "j1");
+    assert_eq!(val["progress_pct"], 75);
+}
+
+#[test]
+fn robot_state_waiting_for_glass_serializes() {
+    let state = RobotState::WaitingForGlass {
+        job_id: "j2".to_string(),
+        reason: GlassWaitReason::NoGlass,
+        timeout_remaining_secs: Some(55),
+    };
+    let val: serde_json::Value = serde_json::to_value(&state).unwrap();
+    assert_eq!(val["state"], "waiting_for_glass");
+    assert_eq!(val["job_id"], "j2");
+    assert_eq!(val["reason"]["type"], "no_glass");
+    assert_eq!(val["timeout_remaining_secs"], 55);
+}
+
+#[test]
+fn robot_state_drink_ready_serializes() {
+    let state = RobotState::DrinkReady {
+        job_id: "j3".to_string(),
+        timeout_remaining_secs: None,
+    };
+    let val: serde_json::Value = serde_json::to_value(&state).unwrap();
+    assert_eq!(val["state"], "drink_ready");
+    assert_eq!(val["job_id"], "j3");
+    assert!(val["timeout_remaining_secs"].is_null());
+}
+
+#[test]
+fn robot_state_error_serializes() {
+    let state = RobotState::Error {
+        code: "GLASS_REMOVED".to_string(),
+        message: "Glass removed mid-pour".to_string(),
+        job_id: Some("j4".to_string()),
+        recoverable: true,
+        recovery: RecoveryAction::PutGlassBack,
+        timeout_remaining_secs: Some(30),
+    };
+    let val: serde_json::Value = serde_json::to_value(&state).unwrap();
+    assert_eq!(val["state"], "error");
+    assert_eq!(val["code"], "GLASS_REMOVED");
+    assert_eq!(val["recovery"], "put_glass_back");
+    assert_eq!(val["recoverable"], true);
+    assert_eq!(val["timeout_remaining_secs"], 30);
 }
 
 #[test_case(JobState::Queued, "\"queued\"" ; "queued")]
-#[test_case(JobState::Running, "\"running\"" ; "running")]
+#[test_case(JobState::Active, "\"active\"" ; "active")]
 #[test_case(JobState::Done, "\"done\"" ; "done")]
 #[test_case(JobState::Cancelled, "\"cancelled\"" ; "cancelled")]
 #[test_case(JobState::Error("fail".to_string()), "\"error\"" ; "error")]
@@ -658,6 +721,73 @@ fn job_item_json_roundtrip() {
     let parsed: JobItem = serde_json::from_str(&serde_json::to_string(&item).unwrap()).unwrap();
     assert_eq!(parsed.liquid_id, "gin");
     assert_eq!(parsed.parts, 3);
+}
+
+// ============================================================================
+// GlassWaitReason Serialization Tests (Task 4.2)
+// ============================================================================
+
+#[test]
+fn glass_wait_reason_no_glass_serializes() {
+    let val: serde_json::Value = serde_json::to_value(&GlassWaitReason::NoGlass).unwrap();
+    assert_eq!(val["type"], "no_glass");
+}
+
+#[test]
+fn glass_wait_reason_too_small_serializes() {
+    let reason = GlassWaitReason::TooSmall {
+        detected_volume: 150.0,
+        required_volume: 200.0,
+    };
+    let val: serde_json::Value = serde_json::to_value(&reason).unwrap();
+    assert_eq!(val["type"], "too_small");
+    assert!((val["detected_volume"].as_f64().unwrap() - 150.0).abs() < 0.01);
+    assert!((val["required_volume"].as_f64().unwrap() - 200.0).abs() < 0.01);
+}
+
+// ============================================================================
+// RecoveryAction Serialization Tests (Task 4.2)
+// ============================================================================
+
+#[test_case(RecoveryAction::PutGlassBack, "\"put_glass_back\"" ; "put_glass_back")]
+#[test_case(RecoveryAction::RemoveGlass, "\"remove_glass\"" ; "remove_glass")]
+#[test_case(RecoveryAction::CallResetErrors, "\"call_reset_errors\"" ; "call_reset_errors")]
+#[test_case(RecoveryAction::None, "\"none\"" ; "none")]
+fn recovery_action_serializes(action: RecoveryAction, expected: &str) {
+    assert_eq!(serde_json::to_string(&action).unwrap(), expected);
+}
+
+// ============================================================================
+// AdminConfig Timeout Default Tests (Task 4.3)
+// ============================================================================
+
+#[test]
+fn admin_config_timeout_defaults_on_missing_fields() {
+    // Minimal JSON without timeout fields — defaults should kick in.
+    let json = r#"{
+        "token": "",
+        "liquids": [],
+        "glass_types": [],
+        "admin_password": ""
+    }"#;
+    let cfg: AdminConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(cfg.glass_wait_timeout_secs, 60);
+    assert_eq!(cfg.drink_ready_timeout_secs, 300);
+}
+
+#[test]
+fn admin_config_timeout_zero_means_indefinite() {
+    let json = r#"{
+        "token": "",
+        "liquids": [],
+        "glass_types": [],
+        "admin_password": "",
+        "glass_wait_timeout_secs": 0,
+        "drink_ready_timeout_secs": 0
+    }"#;
+    let cfg: AdminConfig = serde_json::from_str(json).unwrap();
+    assert_eq!(cfg.glass_wait_timeout_secs, 0);
+    assert_eq!(cfg.drink_ready_timeout_secs, 0);
 }
 
 #[test]

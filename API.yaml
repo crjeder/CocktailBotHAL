@@ -20,18 +20,105 @@ components:
 
   schemas:
 
-    State:
+    GlassWaitReason:
+      oneOf:
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [no_glass]
+          required: [type]
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [too_small]
+            detected_volume:
+              type: number
+            required_volume:
+              type: number
+          required: [type, detected_volume, required_volume]
+      discriminator:
+        propertyName: type
+
+    RecoveryAction:
       type: string
-      enum:
-        - off
-        - self_test
-        - idle
-        - prepared
-        - working
-        - cleaning
-        - drink_ready
-        - error
-        - provisioning
+      enum: [put_glass_back, remove_glass, call_reset_errors, none]
+
+    RobotState:
+      description: |
+        Current state of the robot.  A discriminated union tagged by the `state`
+        field.  Active variants carry job context and timeout countdowns.
+      oneOf:
+        - type: object
+          description: Unit states — no additional fields.
+          properties:
+            state:
+              type: string
+              enum: [off, self_test, idle, cleaning, provisioning]
+          required: [state]
+        - type: object
+          description: Robot is waiting for a glass before dispensing begins.
+          properties:
+            state:
+              type: string
+              enum: [waiting_for_glass]
+            job_id:
+              type: string
+            reason:
+              $ref: '#/components/schemas/GlassWaitReason'
+            timeout_remaining_secs:
+              type: integer
+              nullable: true
+          required: [state, job_id, reason]
+        - type: object
+          description: Robot is actively dispensing.
+          properties:
+            state:
+              type: string
+              enum: [working]
+            job_id:
+              type: string
+            progress_pct:
+              type: integer
+              minimum: 0
+              maximum: 100
+          required: [state, job_id, progress_pct]
+        - type: object
+          description: Dispensing complete; waiting for glass removal.
+          properties:
+            state:
+              type: string
+              enum: [drink_ready]
+            job_id:
+              type: string
+            timeout_remaining_secs:
+              type: integer
+              nullable: true
+          required: [state, job_id]
+        - type: object
+          description: An error has occurred.
+          properties:
+            state:
+              type: string
+              enum: [error]
+            code:
+              type: string
+            message:
+              type: string
+            job_id:
+              type: string
+              nullable: true
+            recoverable:
+              type: boolean
+            recovery:
+              $ref: '#/components/schemas/RecoveryAction'
+            timeout_remaining_secs:
+              type: integer
+              nullable: true
+          required: [state, code, message, recoverable, recovery]
+      discriminator:
+        propertyName: state
 
     ErrorObject:
       type: object
@@ -97,6 +184,16 @@ components:
         max_queue_depth:
           type: integer
           description: Maximum number of jobs (running + queued) accepted simultaneously.
+        has_cancel_button:
+          type: boolean
+          description: |
+            `true` if the hardware has a physical button that cancels the active job.
+            Clients SHOULD hide the software cancel button when `true`.
+        has_power_button:
+          type: boolean
+          description: |
+            `true` if the hardware has a physical power button (long-press powers off).
+            Separate capability from `has_cancel_button` even if on the same physical button.
 
     AdminConfig:
       type: object
@@ -122,6 +219,18 @@ components:
             Write-only.  When supplied in `PATCH /config` or `POST /config/restore`,
             treated as the new plaintext admin password — it is hashed before storage.
             Always returned as `""` in `GET /config` responses (hash is never exposed).
+        glass_wait_timeout_secs:
+          type: integer
+          default: 60
+          description: |
+            Seconds to wait for glass placement before cancelling the job.
+            A value of `0` means wait indefinitely.  Defaults to `60`.
+        drink_ready_timeout_secs:
+          type: integer
+          default: 300
+          description: |
+            Seconds after dispensing completes before emitting a `DRINK_ABANDONED`
+            error.  A value of `0` means wait indefinitely.  Defaults to `300`.
 
     Config:
       type: object
@@ -145,6 +254,10 @@ components:
         admin_password:
           type: string
           description: Always returned as "". See AdminConfig.admin_password.
+        glass_wait_timeout_secs:
+          type: integer
+        drink_ready_timeout_secs:
+          type: integer
 
     BackupPayload:
       type: object
@@ -252,7 +365,7 @@ components:
           description: Human-readable label supplied by the client at job creation.
         state:
           type: string
-          enum: [queued, running, done, cancelled, error]
+          enum: [queued, active, done, cancelled, error]
         progress_pct:
           type: number
 
@@ -278,9 +391,23 @@ paths:
   /status:
     get:
       summary: Get system status
+      description: |
+        Returns the current `RobotState` as a tagged-union JSON object with an
+        additional top-level `errors` array.
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/RobotState'
+                  - type: object
+                    properties:
+                      errors:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ErrorObject'
 
   /control/power:
     post:
@@ -536,8 +663,10 @@ paths:
         **Event types:**
 
         `state_change` — emitted when `RobotState` transitions.
+        The payload is the full `RobotState` tagged-union object (same
+        shape as `GET /status` minus the `errors` key).
         ```json
-        {"state": "working"}
+        {"state": "working", "job_id": "abc", "progress_pct": 42}
         ```
 
         `job_update` — emitted when a dispensing job is created,
@@ -547,7 +676,7 @@ paths:
         the last-known state and progress at the time of departure.
         ```json
         {"job_id": "abc", "name": "xyz",
-         "state": "running", "progress_pct": 45}
+         "state": "active", "progress_pct": 45}
         ```
       responses:
         '200':

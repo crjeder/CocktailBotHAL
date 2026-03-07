@@ -71,8 +71,12 @@ async fn capture_snapshot<Stat: StatusHal, Disp: DispenseHal>(
 }
 
 /// Emit `state_change` event for the current state.
+///
+/// Serialises `RobotState` directly (tagged union via `#[serde(tag = "state")]`),
+/// so clients receive e.g. `{"state":"working","job_id":"…","progress_pct":42}`.
 async fn emit_state_event<W: Write + Unpin>(socket: &mut W, state: &RobotState) -> Result<(), ()> {
-    write_sse_event(socket, "state_change", &serde_json::json!({"state": state})).await
+    let val = serde_json::to_value(state).map_err(|_| ())?;
+    write_sse_event(socket, "state_change", &val).await
 }
 
 /// Emit a `job_update` event for a single job.
