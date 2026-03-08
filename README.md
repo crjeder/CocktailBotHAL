@@ -161,10 +161,19 @@ server.run(net_stack).await;
 
 6. **ESP32 specifics.** Use `#[esp_hal::main]` as the async entry point, not
    `#[embassy_executor::main]`. See [`examples/esp32/main.rs`](examples/esp32/main.rs)
-   for the full wiring pattern including the heap allocator and SSE task.
+   for the full wiring pattern including the heap allocator. SSE is served by
+   `ApiServer` on port 80 as `GET /v1/events` — no separate task is required.
 
 All HAL trait methods are `async fn`. Your implementations may call `await` on
 hardware drivers, but must not block the executor with synchronous waits.
+
+## Example
+
+to run it:
+```
+cargo run --example mock-server [-- --port 8080 --glass-present --dispense-duration-secs 5]
+# Bearer token: changeme  |  Admin: Basic YWRtaW46Y2hhbmdlbWU=
+```
 
 ## Support
 

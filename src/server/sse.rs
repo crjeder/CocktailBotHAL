@@ -1,19 +1,16 @@
 // src/server/sse.rs
 //
-// Server-Sent Events server running on a separate TCP port (9000).
+// Server-Sent Events handler for `GET /v1/events`.
+// Served by ApiServer on port 80 as a long-lived streaming route.
 // Polls existing HAL traits for state and job changes every 500ms
 // and emits typed SSE events to connected clients.
 
 use alloc::format;
 use alloc::vec::Vec;
-use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Instant, Timer};
 use embedded_io_async::Write;
 
 use crate::hal::{DispenseHal, JobStatus, RobotState, StatusHal};
-
-/// SSE server port.
-const SSE_PORT: u16 = 9000;
 
 /// Interval between HAL polls (500ms).
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
@@ -94,117 +91,95 @@ async fn emit_job_event<W: Write + Unpin>(socket: &mut W, job: &JobStatus) -> Re
     .await
 }
 
-/// Compare two job lists and return whether any job changed.
+/// Compare two job statuses and return whether any tracked field changed.
 fn job_changed(old: &JobStatus, new: &JobStatus) -> bool {
-    // Compare serialized state strings and progress.
-    // JobState doesn't derive PartialEq, so we compare via
-    // the progress_pct and serialize the state for comparison.
     old.progress_pct != new.progress_pct
         || serde_json::to_string(&old.state).ok() != serde_json::to_string(&new.state).ok()
 }
 
 // ====================================================================
-// SSE server
+// SSE stream handler
 // ====================================================================
 
-/// SSE server that runs on port 9000. Accepts one client at a
-/// time. Each connected client receives an initial snapshot
-/// followed by change events at 500ms polling intervals.
-pub struct SseServer<'a, Stat, Disp> {
-    pub status: &'a Stat,
-    pub dispense: &'a Disp,
-}
+/// Serve one SSE client until the connection drops.
+///
+/// Sends SSE response headers, emits an initial state/job snapshot, then
+/// polls for changes every 500 ms and emits keepalive comments every 30 s.
+/// Called from `ApiServer::handle_request` for `GET /v1/events`.
+pub(super) async fn handle_sse_stream<Stat: StatusHal, Disp: DispenseHal, W: Write + Unpin>(
+    status: &Stat,
+    dispense: &Disp,
+    socket: &mut W,
+) {
+    // Send SSE response headers.
+    if write_sse_headers(socket).await.is_err() {
+        return;
+    }
 
-impl<'a, Stat: StatusHal, Disp: DispenseHal> SseServer<'a, Stat, Disp> {
-    /// Main accept loop — listens on port 9000.
-    pub async fn run(&self, net_stack: embassy_net::Stack<'_>) {
-        loop {
-            let mut rx_buf = [0u8; 1024];
-            let mut tx_buf = [0u8; 4096];
-            let mut socket = TcpSocket::new(net_stack, &mut rx_buf, &mut tx_buf);
-            if socket.accept(SSE_PORT).await.is_err() {
-                continue;
-            }
-            // Discard the incoming HTTP request headers; we
-            // only care that a connection was established.
-            let _ = crate::server::http::read_http_request(&mut socket).await;
+    // Send initial snapshot.
+    let mut prev = capture_snapshot(status, dispense).await;
 
-            self.handle_client(&mut socket).await;
+    if emit_state_event(socket, &prev.state).await.is_err() {
+        return;
+    }
+    for job in &prev.jobs {
+        if emit_job_event(socket, job).await.is_err() {
+            return;
         }
     }
 
-    /// Serve one SSE client until the connection drops.
-    async fn handle_client<W: Write + Unpin>(&self, socket: &mut W) {
-        // Send SSE response headers.
-        if write_sse_headers(socket).await.is_err() {
-            return;
-        }
+    let mut last_event_time = Instant::now();
 
-        // Send initial snapshot.
-        let mut prev = capture_snapshot(self.status, self.dispense).await;
+    // Poll loop.
+    loop {
+        Timer::after(POLL_INTERVAL).await;
 
-        if emit_state_event(socket, &prev.state).await.is_err() {
-            return;
-        }
-        for job in &prev.jobs {
-            if emit_job_event(socket, job).await.is_err() {
+        let current = capture_snapshot(status, dispense).await;
+        let mut sent_event = false;
+
+        // Check for state change.
+        if current.state != prev.state {
+            if emit_state_event(socket, &current.state).await.is_err() {
                 return;
             }
+            sent_event = true;
         }
 
-        let mut last_event_time = Instant::now();
+        // Check for job changes.
+        for new_job in &current.jobs {
+            let changed = match prev.jobs.iter().find(|old| old.job_id == new_job.job_id) {
+                Some(old_job) => job_changed(old_job, new_job),
+                None => true, // new job appeared
+            };
 
-        // Poll loop.
-        loop {
-            Timer::after(POLL_INTERVAL).await;
-
-            let current = capture_snapshot(self.status, self.dispense).await;
-            let mut sent_event = false;
-
-            // Check for state change.
-            if current.state != prev.state {
-                if emit_state_event(socket, &current.state).await.is_err() {
+            if changed {
+                if emit_job_event(socket, new_job).await.is_err() {
                     return;
                 }
                 sent_event = true;
             }
+        }
 
-            // Check for job changes.
-            for new_job in &current.jobs {
-                let changed = match prev.jobs.iter().find(|old| old.job_id == new_job.job_id) {
-                    Some(old_job) => job_changed(old_job, new_job),
-                    None => true, // new job appeared
-                };
-
-                if changed {
-                    if emit_job_event(socket, new_job).await.is_err() {
-                        return;
-                    }
-                    sent_event = true;
-                }
-            }
-
-            // Emit a terminal job_update for jobs that departed from the list.
-            for job in &prev.jobs {
-                let departed = !current.jobs.iter().any(|j| j.job_id == job.job_id);
-                if departed {
-                    if emit_job_event(socket, job).await.is_err() {
-                        return;
-                    }
-                    sent_event = true;
-                }
-            }
-
-            if sent_event {
-                last_event_time = Instant::now();
-            } else if Instant::now().duration_since(last_event_time) >= KEEPALIVE_INTERVAL {
-                if write_keepalive(socket).await.is_err() {
+        // Emit a terminal job_update for jobs that departed from the list.
+        for job in &prev.jobs {
+            let departed = !current.jobs.iter().any(|j| j.job_id == job.job_id);
+            if departed {
+                if emit_job_event(socket, job).await.is_err() {
                     return;
                 }
-                last_event_time = Instant::now();
+                sent_event = true;
             }
-
-            prev = current;
         }
+
+        if sent_event {
+            last_event_time = Instant::now();
+        } else if Instant::now().duration_since(last_event_time) >= KEEPALIVE_INTERVAL {
+            if write_keepalive(socket).await.is_err() {
+                return;
+            }
+            last_event_time = Instant::now();
+        }
+
+        prev = current;
     }
 }

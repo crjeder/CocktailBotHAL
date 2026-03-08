@@ -15,7 +15,7 @@ the exact steps:
 1. Uncomment the right embassy timer block for your chip variant.
 2. Initialise esp-wifi and construct the embassy-net `Stack`.
 3. Pass the `Stack` to `ApiServer::run()`.
-4. Wire the same `Stack` into the `sse_task` for SSE streaming.
+   (SSE is served as `GET /v1/events` by `ApiServer` — no separate task needed.)
 
 Also: the library uses `serde_json` which requires `std`. For a fully
 bare-metal build, switch to `serde_json` alloc feature or `serde-json-core`.

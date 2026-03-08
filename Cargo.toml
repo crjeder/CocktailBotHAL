@@ -15,6 +15,9 @@ name = "dev"
 name = "esp32"
 required-features = ["esp32"]
 
+[[example]]
+name = "mock-server"
+
 [dependencies]
 static_cell = "2"
 embassy-net = { version = "0.8.0", features = ["tcp", "proto-ipv4", "medium-ethernet"] }

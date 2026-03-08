@@ -42,10 +42,8 @@ use cocktail_bot_hal::server::{ApiServer, RobotHal};
 use config::Esp32Config;
 use control::Esp32Control;
 use dispense::Esp32Dispense;
-use embassy_executor::Spawner;
 use hasher::Esp32PasswordHasher;
 use sensors::Esp32Sensors;
-use static_cell::StaticCell;
 use status::Esp32Status;
 use storage::Esp32Storage;
 
@@ -53,28 +51,12 @@ use storage::Esp32Storage;
 // Adjust the size for the RAM available on your chip variant.
 esp_alloc::heap_allocator!(72 * 1024);
 
-// Static instances for the SSE read path (require 'static lifetime for tasks).
-static SSE_STATUS: StaticCell<Esp32Status> = StaticCell::new();
-static SSE_DISPENSE: StaticCell<Esp32Dispense> = StaticCell::new();
-
-/// SSE server task — streams robot state and job updates to display clients.
-///
-/// TODO: add a `net_stack` parameter (embassy-net `Stack`) and replace the
-/// body with:
-///   cocktail_bot_hal::server::sse::SseServer { status, dispense }
-///       .run(net_stack)
-///       .await;
-#[embassy_executor::task]
-async fn sse_task(status: &'static Esp32Status, dispense: &'static Esp32Dispense) {
-    let _ = (status, dispense);
-}
-
 /// Main async entry point — provided by esp-hal.
 ///
 /// esp-hal initialises chip peripherals and passes a `Spawner` here.
-/// Embassy tasks are spawned; the executor runs until reset or panic.
+/// ApiServer serves all REST routes and SSE (GET /v1/events) on port 80.
 #[esp_hal::main]
-async fn main(spawner: Spawner) {
+async fn main(_spawner: embassy_executor::Spawner) {
     // 1. Initialise esp-hal (clocks, GPIO, watchdog, etc.).
     let peripherals = esp_hal::init(esp_hal::Config::default());
 
@@ -104,13 +86,9 @@ async fn main(spawner: Spawner) {
     //
     todo!("initialise esp-wifi and create the embassy-net Stack");
 
-    // 4. Spawn the SSE server task.
-    let sse_status = SSE_STATUS.init(Esp32Status::new());
-    let sse_dispense = SSE_DISPENSE.init(Esp32Dispense::new());
-    spawner.spawn(sse_task(sse_status, sse_dispense)).unwrap();
-
-    // 5. Build and run the REST API server.
+    // 4. Build and run the REST API server.
     //    Replace todo!() in .run() with the embassy-net Stack from step 3.
+    //    SSE is served as GET /v1/events on the same port (80).
     let mut server = ApiServer {
         hal: RobotHal {
             control: Esp32Control::new(),

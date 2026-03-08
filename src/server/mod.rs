@@ -17,7 +17,7 @@ const DEFAULT_TOKEN: &str = "changeme";
 const DEFAULT_ADMIN_PASSWORD: &str = "changeme";
 
 /// Routes that require HTTP Basic Auth with the admin password.
-/// All other routes require a Bearer token.
+/// All other routes require a Bearer token (unless in NO_AUTH_ROUTES).
 const ADMIN_ROUTES: &[(&str, &str)] = &[
     ("PATCH", "/v1/config"),
     ("GET", "/v1/config/backup"),
@@ -29,10 +29,19 @@ const ADMIN_ROUTES: &[(&str, &str)] = &[
     ("POST", "/v1/cleaning/stop"),
 ];
 
+/// Routes that require no authentication at all.
+/// The SSE stream is unauthenticated so display clients on the LAN can
+/// connect without a token.
+const NO_AUTH_ROUTES: &[(&str, &str)] = &[("GET", "/v1/events")];
+
 /// Non-admin routes that remain active even when the robot is in
 /// `Provisioning` state.  All other non-admin routes return 503 while
 /// provisioning.
-const PROVISIONING_ALLOWED: &[(&str, &str)] = &[("GET", "/v1/status"), ("GET", "/v1/config")];
+const PROVISIONING_ALLOWED: &[(&str, &str)] = &[
+    ("GET", "/v1/status"),
+    ("GET", "/v1/config"),
+    ("GET", "/v1/events"),
+];
 
 /// Compare two token strings in constant time to prevent timing-based
 /// enumeration. Returns `true` only if both strings are identical in length
@@ -100,14 +109,31 @@ impl<
             Ok(r) => r,
             Err(_) => return,
         };
+        self.handle_request(&request, socket).await;
+    }
 
+    /// Dispatch a pre-parsed HTTP request to the appropriate handler.
+    ///
+    /// Useful when the caller must inspect the path before delegating — for
+    /// example, a mock server that intercepts `/mock/` routes before passing
+    /// everything else here.
+    pub async fn handle_request<S: Write + Unpin>(
+        &mut self,
+        request: &http::HttpRequest,
+        socket: &mut S,
+    ) {
         let method = request.method.as_str();
         let path = request.path.as_str();
 
         // Authenticate before dispatching to any handler.
         let cfg = self.hal.config.get_active_config().await;
         let is_admin_route = ADMIN_ROUTES.iter().any(|(m, p)| *m == method && *p == path);
-        let authorized = if is_admin_route {
+        let is_no_auth_route = NO_AUTH_ROUTES
+            .iter()
+            .any(|(m, p)| *m == method && *p == path);
+        let authorized = if is_no_auth_route {
+            true
+        } else if is_admin_route {
             // Admin routes require HTTP Basic Auth with the admin password.
             let effective_hash = cfg.admin_password.as_str();
             request
@@ -165,6 +191,11 @@ impl<
         }
 
         match (method, path) {
+            // ----- SSE stream -----
+            ("GET", "/v1/events") => {
+                sse::handle_sse_stream(&self.hal.status, &self.hal.dispense, socket).await;
+            }
+
             // ----- status -----
             ("GET", "/v1/status") => {
                 handlers::status::handle_status(&self.hal.status, socket).await;

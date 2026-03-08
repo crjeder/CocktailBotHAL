@@ -653,7 +653,7 @@ paths:
     get:
       summary: Server-Sent Events stream
       description: |
-        Long-lived SSE connection served on a **separate port (9000)**.
+        Long-lived SSE connection served on **port 80** (same port as the REST API).
         On connect the server sends an initial snapshot of the current
         robot state and all active/queued jobs, then emits change
         events as they occur (polled every 500ms).

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed — sse-on-http-port
+- `SseServer` struct and its dedicated embassy task on port 9000 removed from `src/server/sse.rs`
+- `SSE_STATUS` / `SSE_DISPENSE` static cells and `sse_task` removed from `examples/dev/main.rs` and `examples/esp32/main.rs`
+
+### Changed — sse-on-http-port
+- SSE stream moved from a separate TCP port (9000) to `GET /v1/events` on port 80, served directly by `ApiServer`
+- `handle_client` (private) renamed to `pub(super) handle_sse_stream`; signature is now `handle_sse_stream(status, dispense, socket)` — same pattern as every other handler
+- `NO_AUTH_ROUTES` constant added to `src/server/mod.rs`; `GET /v1/events` bypasses Bearer token validation
+- `GET /v1/events` added to `PROVISIONING_ALLOWED`; display clients receive state events even during initial provisioning
+
 ### Changed — esp32-async-executor
 - `examples/esp32/main.rs`: replaced `fn main()` + `StaticCell<Executor>` spin-executor
   pattern with `#[esp_hal::main] async fn main(spawner: Spawner)` — the correct async

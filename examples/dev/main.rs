@@ -22,7 +22,7 @@ use cocktail_bot_hal::hal::{
     LiquidCalibration, LiquidConfig, PasswordHasher, RobotConfig, RobotState, SensorHal, StatusHal,
 };
 use cocktail_bot_hal::server::{ApiServer, RobotHal};
-use embassy_executor::{Executor, Spawner};
+use embassy_executor::Executor;
 use static_cell::StaticCell;
 use storage::RamStorageHal;
 
@@ -195,39 +195,18 @@ impl PasswordHasher for StubPasswordHasher {
 // Entry point
 //
 // Runs the embassy spin executor for host/development builds.
-// Constructs all stub HAL instances and creates ApiServer + SseServer.
+// Constructs all stub HAL instances and creates ApiServer.
+// SSE is served by ApiServer on port 80 at GET /v1/events.
 //
 // TODO (ESP32 bring-up): see examples/esp32/main.rs for the BSP entry point
 // using #[esp_hal::main].
 // ============================================================================
 
-/// Static storage for the StatusHal instance used by the SSE server.
-static SSE_STATUS: StaticCell<StubStatusHal> = StaticCell::new();
-
-/// Static storage for the DispenseHal instance used by the SSE server (read
-/// path only — job listing for change detection).
-static SSE_DISPENSE: StaticCell<StubDispenseHal> = StaticCell::new();
-
 static EXECUTOR: StaticCell<Executor> = StaticCell::new();
-
-/// SSE server task — streams robot state and job updates to the display client.
-///
-/// In a real bring-up, wire `net_stack` from esp-hal-embassy and call:
-///   cocktail_bot_hal::server::sse::SseServer { status, dispense }.run(net_stack).await;
-#[embassy_executor::task]
-async fn sse_task(status: &'static StubStatusHal, dispense: &'static StubDispenseHal) {
-    // Real call (requires embassy-net stack):
-    //   cocktail_bot_hal::server::sse::SseServer { status, dispense }.run(net_stack).await;
-    let _ = (status, dispense);
-}
 
 /// Async stub entry task — constructs all HAL stubs and the API server.
 #[embassy_executor::task]
-async fn async_main(spawner: Spawner) {
-    let sse_status = SSE_STATUS.init(StubStatusHal);
-    let sse_dispense = SSE_DISPENSE.init(StubDispenseHal);
-    spawner.spawn(sse_task(sse_status, sse_dispense)).unwrap();
-
+async fn async_main() {
     let _server = ApiServer {
         hal: RobotHal {
             control: StubControlHal,
@@ -246,6 +225,6 @@ async fn async_main(spawner: Spawner) {
 fn main() {
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        spawner.spawn(async_main(spawner)).unwrap();
+        spawner.spawn(async_main()).unwrap();
     });
 }
