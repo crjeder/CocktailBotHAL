@@ -96,6 +96,18 @@ The following items have been implemented and are no longer open:
   Cleaning handler gates on `Idle`/`Provisioning`, returns 409 otherwise.
   `AdminConfig` gains `glass_wait_timeout_secs` (60s) and `drink_ready_timeout_secs`
   (300s). `Capabilities` gains `has_cancel_button` and `has_power_button`.
+- **ESP32 async entry point** — `examples/esp32/main.rs` replaced the spin-executor
+  `fn main()` + `StaticCell<Executor>` pattern with `#[esp_hal::main] async fn main(spawner: Spawner)`.
+  Embassy timer init and esp-wifi/embassy-net stack are marked `todo!()` pending
+  hardware bring-up (remaining blocker above).
+- **SSE on HTTP port** — SSE stream moved from a dedicated TCP port (9000) to
+  `GET /v1/events` on the main HTTP port, served directly by `ApiServer`. Separate
+  `SseServer` struct and `sse_task` removed. `NO_AUTH_ROUTES` added so `/v1/events`
+  bypasses Bearer token validation. SSE also allowed during `Provisioning` state.
+- **Mock server example** — `examples/mock-server/` added: a fully self-contained
+  development server with realistic HAL state machine simulation (`state.rs`),
+  SSE streaming (`sse.rs`), and stub implementations for all 7 HAL traits. Runs
+  on host with `cargo run --example mock-server`.
 
 ---
 
