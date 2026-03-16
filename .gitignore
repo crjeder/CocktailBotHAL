@@ -3,3 +3,9 @@
 target/
 CocktailBotHAL.code-workspace
 Cargo.lock
+target/
+# Claude settings and project files
+.claude/settings.json
+.claude/settings.local.json
+.claude/projects/
+.claude/*.local.*

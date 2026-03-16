@@ -184,6 +184,7 @@ struct Args {
     port: u16,
     glass_present: bool,
     dispense_duration_secs: u32,
+    liquids_file: Option<String>,
 }
 
 fn parse_args() -> Args {
@@ -191,6 +192,7 @@ fn parse_args() -> Args {
     let mut port: u16 = 8000;
     let mut glass_present = false;
     let mut dispense_duration_secs: u32 = 10;
+    let mut liquids_file: Option<String> = None;
     let mut i = 1;
     while i < argv.len() {
         match argv[i].as_str() {
@@ -210,6 +212,10 @@ fn parse_args() -> Args {
                 dispense_duration_secs = argv[i + 1].parse().unwrap_or(10);
                 i += 2;
             }
+            "--liquids" if i + 1 < argv.len() => {
+                liquids_file = Some(argv[i + 1].clone());
+                i += 2;
+            }
             _ => {
                 i += 1;
             }
@@ -219,7 +225,15 @@ fn parse_args() -> Args {
         port,
         glass_present,
         dispense_duration_secs,
+        liquids_file,
     }
+}
+
+fn load_liquids_file(path: &str) -> Vec<cocktail_bot_hal::hal::LiquidConfig> {
+    let raw = std::fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("cannot read liquids file {path:?}: {e}"));
+    serde_json::from_str(&raw)
+        .unwrap_or_else(|e| panic!("invalid JSON in liquids file {path:?}: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -229,8 +243,16 @@ fn parse_args() -> Args {
 fn main() {
     let args = parse_args();
 
+    // Load optional liquids override from file.
+    let initial_liquids = args.liquids_file.as_deref().map(load_liquids_file);
+
     // Shared state — all HAL stubs and the ticker share this.
-    let shared = MockState::new(args.glass_present, args.dispense_duration_secs).into_shared();
+    let shared = MockState::new(
+        args.glass_present,
+        args.dispense_duration_secs,
+        initial_liquids,
+    )
+    .into_shared();
 
     // Ticker thread — advances the state machine every 100 ms.
     {

@@ -1,0 +1,10 @@
+[
+  { "id": "gin",    "name": "Gin",          "position": 0, "calibration": { "factor": 1.0 } },
+  { "id": "tonic",  "name": "Tonic Water",  "position": 1, "calibration": { "factor": 1.0 } },
+  { "id": "lime",   "name": "Lime Juice",   "position": 2, "calibration": { "factor": 0.8 } },
+  { "id": "vodka",   "name": "Vodka",   "position": 3, "calibration": { "factor": 0.8 } },
+  { "id": "syrup",  "name": "Syrup",        "position": 4, "calibration": { "factor": 1.2 } },
+  { "id": "tequila",   "name": "Tequila",   "position": 5, "calibration": { "factor": 0.8 } },
+  { "id": "orange",   "name": "Orange Juice",   "position": 6, "calibration": { "factor": 1.0 } },
+  { "id": "grenadine",   "name": "Grenadine Syrup",   "position": 7, "calibration": { "factor": 1.5 } }
+]

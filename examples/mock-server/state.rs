@@ -81,8 +81,15 @@ impl MockState {
     ///
     /// `glass_present` controls the initial glass sensor reading.
     /// `dispense_duration_secs` is how long a full dispense job takes.
-    pub fn new(glass_present: bool, dispense_duration_secs: u32) -> Self {
-        let config = default_config();
+    pub fn new(
+        glass_present: bool,
+        dispense_duration_secs: u32,
+        initial_liquids: Option<Vec<cocktail_bot_hal::hal::LiquidConfig>>,
+    ) -> Self {
+        let mut config = default_config();
+        if let Some(liquids) = initial_liquids {
+            config.liquids = liquids;
+        }
         MockState {
             robot_state: RobotState::Off,
             glass: GlassSensorState {
